@@ -42,14 +42,23 @@ typedef enum MessageType
     UserData='U'
 }MessageType;
 
-typedef void(*messabus_bus_callback)(const char* node_name, PayloadType ptype, MessageType mtype, const char* messagebuffer);
+typedef enum DataType
+{
+    Text='T',
+    Video='V',
+    Image='I',
+    Audio='A',
+    Raw='R'
+}DataType;
+
+typedef void(*messabus_bus_callback)(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer);
 
 extern __attribute__((visibility("default"))) bool message_bus_initialize(void** pptr, messabus_bus_callback callback);
 extern __attribute__((visibility("default"))) bool message_bus_open(void* ptr);
 extern __attribute__((visibility("default"))) bool message_bus_close(void* ptr);
 extern __attribute__((visibility("default"))) bool message_bus_register(void* ptr);
 extern __attribute__((visibility("default"))) bool message_bus_deregister(void* ptr);
-extern __attribute__((visibility("default"))) bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, MessageType mtype, const char* messagebuffer, long buffersize);
+extern __attribute__((visibility("default"))) bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize);
 extern __attribute__((visibility("default"))) bool message_bus_has_node(void* ptr, const char* node_name);
 
 #endif

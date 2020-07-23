@@ -15,6 +15,7 @@ link_libraries(rt pthread dl)
 
 set(SOURCE
 ${SOURCE}
+../CoreLib/src/Base64.c
 ../CoreLib/src/Logger.c
 ../CoreLib/src/SignalHandler.c
 ../CoreLib/src/File.c
@@ -28,6 +29,7 @@ ${SOURCE}
 
 set(HEADERS
 ${HEADERS}
+../CoreLib/include/Base64.h
 ../CoreLib/include/Logger.h
 ../CoreLib/include/SignalHandler.h
 ../CoreLib/include/StringEx.h

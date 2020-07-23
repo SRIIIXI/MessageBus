@@ -4,7 +4,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(Project Timon)
 project(${Project})
 
-include_directories(./include ../../CoreLib/include ../../MessageBus/include /include/ /usr/include/ /usr/local/include/)
+include_directories(./include/ ../../CoreLib/include/ ../../MessageBus/include/ ../../MessageBusClient/include/ /include/ /usr/include/ /usr/local/include/)
 
 link_libraries(rt pthread dl)
 

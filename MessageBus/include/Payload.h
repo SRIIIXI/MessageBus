@@ -21,11 +21,19 @@
 #define PAYLOAD_SUB_TYPE_NODELIST 'L'
 #define PAYLOAD_SUB_TYPE_LOOPBACK 'K'
 
+#define PAYLOAD_SUB_TYPE_USERDATA 'U'
+
+#define PAYLOAD_DATA_TYPE_VIDEO 'V'
+#define PAYLOAD_DATA_TYPE_IMAGE 'I'
+#define PAYLOAD_DATA_TYPE_AUDIO 'A'
+#define PAYLOAD_DATA_TYPE_RAW 'R'
+
 #pragma push(1)
 typedef struct payload
 {
     char payload_type;
     char payload_sub_type;
+    char payload_data_type;
     char sender[32];
     char receipient[32];
     long data_size;
