@@ -36,6 +36,7 @@ typedef struct payload
     char payload_data_type;
     char sender[32];
     char receipient[32];
+    long payload_id;
     long data_size;
     void* data;
 }payload;

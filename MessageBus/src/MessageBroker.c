@@ -318,10 +318,11 @@ void payload_handle_protocol(payload* message, void* vptr_responder)
     if(message->payload_type == PAYLOAD_TYPE_DATA && message->payload_sub_type == PAYLOAD_SUB_TYPE_LOOPBACK)
     {
         payload_send(message, responder_ptr);
+        return;
     }
 
     // All other payload types that carry trailing data buffers
-    if(message->payload_type == PAYLOAD_TYPE_DATA || message->payload_type == PAYLOAD_TYPE_REQUEST || message->payload_type == PAYLOAD_TYPE_RESPONSE)
+    if(message->payload_type == PAYLOAD_TYPE_DATA || message->payload_type == PAYLOAD_TYPE_REQUEST || message->payload_type == PAYLOAD_TYPE_RESPONSE || message->payload_type ==  PAYLOAD_TYPE_EVENT)
     {
         pthread_mutex_lock(&socket_mutex);
 

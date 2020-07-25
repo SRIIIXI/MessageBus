@@ -168,7 +168,7 @@ bool message_bus_has_node(void* ptr, const char* node_name)
 }
 
 // Messaging
-bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize)
+bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id)
 {
     message_bus* message_bus_ptr = (struct message_bus*)ptr;
 
@@ -282,7 +282,7 @@ bool handle_protocol(void* ptr, payload* message)
         }
     }
 
-    message_bus_ptr->callback_ptr(message->sender, message->payload_type, message->payload_sub_type, message->payload_data_type, message->data);
+    message_bus_ptr->callback_ptr(message->sender, message->payload_type, message->payload_sub_type, message->payload_data_type, message->data, message->data_size, message->payload_id);
 
     return true;
 }
