@@ -26,6 +26,10 @@
 #define LPSOCKADDR sockaddr*
 #define MAX_RESPONDERS 65535
 
+#ifndef ERESTART
+#define ERESTART 99
+#endif
+
 static void on_signal_received(SignalType type);
 static void *responder_run(void* responder_thread_params);
 static void payload_handle_protocol(payload* message, void* vptr_responder);
