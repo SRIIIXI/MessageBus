@@ -89,7 +89,7 @@ bool broker_run()
         return BindFailed;
     }
 
-    if(listen(listener_socket,5)==SOCKET_ERROR)
+    if(listen(listener_socket,5) == SOCKET_ERROR)
     {
         return ListenFailed;
     }

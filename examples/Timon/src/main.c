@@ -7,7 +7,7 @@
 void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id);
 
 int main(int argc, char* argv[])
-{
+{    
     void* message_bus = NULL;
 
     if(!message_bus_initialize(&message_bus, network_event))

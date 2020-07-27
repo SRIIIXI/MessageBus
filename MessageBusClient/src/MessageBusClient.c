@@ -58,7 +58,9 @@ bool message_bus_initialize(void** pptr, messabus_bus_callback callback)
     message_bus_ptr->callback_ptr = callback;
     read_current_process_name(message_bus_ptr);
 
-    if(!responder_create_socket(&message_bus_ptr->responder, message_bus_ptr->message_bus_host, message_bus_ptr->message_bus_port))
+    message_bus_ptr->responder = responder_create_socket(&message_bus_ptr->responder, message_bus_ptr->message_bus_host, message_bus_ptr->message_bus_port);
+
+    if(!message_bus_ptr->responder)
     {
         return false;
     }
