@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 
-void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id);
+void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long payload_id);
 
 int main(int argc, char* argv[])
 {    
@@ -49,7 +49,8 @@ int main(int argc, char* argv[])
     return 0;
 }
 
-void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id)
+void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long payload_id)
 {
-    printf("%s %c %c %s\n", node_name, ptype, mtype, messagebuffer);
+    printf("network_event\n");
+    printf("%s %c %c %s %ld\n", node_name, ptype, mtype, messagebuffer, payload_id);
 }

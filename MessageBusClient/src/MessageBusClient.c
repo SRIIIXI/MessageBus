@@ -21,6 +21,7 @@ modification, is allowed only with prior permission from CIMCON Automation
 #include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <limits.h>
 
 #pragma push(1)
 typedef struct message_bus
@@ -32,6 +33,7 @@ typedef struct message_bus
     char process_name[32];
     int message_bus_port;
     pthread_t thread;
+    unsigned long payload_sequence;
 }message_bus;
 
 static bool read_current_process_name(void* ptr);
@@ -57,6 +59,7 @@ bool message_bus_initialize(void** pptr, messabus_bus_callback callback)
     message_bus_ptr->message_bus_port = 49151;
     message_bus_ptr->callback_ptr = callback;
     read_current_process_name(message_bus_ptr);
+    message_bus_ptr->payload_sequence = 0;
 
     message_bus_ptr->responder = responder_create_socket(&message_bus_ptr->responder, message_bus_ptr->message_bus_host, message_bus_ptr->message_bus_port);
 
@@ -119,6 +122,12 @@ bool message_bus_register(void* ptr)
         return false;
     }
 
+    message_bus_ptr->payload_sequence++;
+    if(message_bus_ptr->payload_sequence > ULONG_MAX -1)
+    {
+        message_bus_ptr->payload_sequence = 1;
+    }
+
     payload reg_payload = {0};
 
     reg_payload.payload_type = PAYLOAD_TYPE_EVENT;
@@ -126,8 +135,9 @@ bool message_bus_register(void* ptr)
     strcpy(reg_payload.sender, message_bus_ptr->process_name);
     strcpy(reg_payload.receipient, "MessageBus");
     reg_payload.data_size = 0;
+    reg_payload.payload_id = message_bus_ptr->payload_sequence;
 
-    return responder_send_buffer(message_bus_ptr->responder, &reg_payload, sizeof (struct payload));
+    return responder_send_buffer(message_bus_ptr->responder, &reg_payload, sizeof (struct payload) - sizeof (void*));
 }
 
 bool message_bus_deregister(void* ptr)
@@ -139,15 +149,60 @@ bool message_bus_deregister(void* ptr)
         return false;
     }
 
-    payload reg_payload = {0};
+    message_bus_ptr->payload_sequence++;
+    if(message_bus_ptr->payload_sequence > ULONG_MAX -1)
+    {
+        message_bus_ptr->payload_sequence = 1;
+    }
 
-    reg_payload.payload_type = PAYLOAD_TYPE_EVENT;
-    reg_payload.payload_sub_type = PAYLOAD_SUB_TYPE_DEREGISTER;
-    strcpy(reg_payload.sender, message_bus_ptr->process_name);
-    strcpy(reg_payload.receipient, "MessageBus");
-    reg_payload.data_size = 0;
+    payload dereg_payload = {0};
 
-    return responder_send_buffer(message_bus_ptr->responder, &reg_payload, sizeof (struct payload));
+    dereg_payload.payload_type = PAYLOAD_TYPE_EVENT;
+    dereg_payload.payload_sub_type = PAYLOAD_SUB_TYPE_DEREGISTER;
+    strcpy(dereg_payload.sender, message_bus_ptr->process_name);
+    strcpy(dereg_payload.receipient, "MessageBus");
+    dereg_payload.data_size = 0;
+    dereg_payload.payload_id = message_bus_ptr->payload_sequence;
+
+    return responder_send_buffer(message_bus_ptr->responder, &dereg_payload, sizeof (struct payload) - sizeof (void*));
+}
+
+// Messaging
+bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id)
+{
+    message_bus* message_bus_ptr = (struct message_bus*)ptr;
+
+    if(message_bus_ptr == NULL)
+    {
+        return false;
+    }
+
+    message_bus_ptr->payload_sequence++;
+    if(message_bus_ptr->payload_sequence > ULONG_MAX -1)
+    {
+        message_bus_ptr->payload_sequence = 1;
+    }
+
+    payload data_payload = {0};
+
+    data_payload.payload_type = ptype;
+    data_payload.payload_sub_type = mtype;
+    strcpy(data_payload.sender, message_bus_ptr->process_name);
+    strcpy(data_payload.receipient, node_name);
+    data_payload.data_size = buffersize;
+    data_payload.payload_id = message_bus_ptr->payload_sequence;
+
+    if(!responder_send_buffer(message_bus_ptr->responder, &data_payload, sizeof (struct payload) - sizeof (void*)))
+    {
+        return false;
+    }
+
+    if(!responder_send_buffer(message_bus_ptr->responder, messagebuffer, (size_t)buffersize))
+    {
+        return false;
+    }
+
+    return true;
 }
 
 bool message_bus_has_node(void* ptr, const char* node_name)
@@ -167,37 +222,6 @@ bool message_bus_has_node(void* ptr, const char* node_name)
     }
 
     return false;
-}
-
-// Messaging
-bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id)
-{
-    message_bus* message_bus_ptr = (struct message_bus*)ptr;
-
-    if(message_bus_ptr == NULL)
-    {
-        return false;
-    }
-
-    payload reg_payload = {0};
-
-    reg_payload.payload_type = ptype;
-    reg_payload.payload_sub_type = mtype;
-    strcpy(reg_payload.sender, message_bus_ptr->process_name);
-    strcpy(reg_payload.receipient, node_name);
-    reg_payload.data_size = buffersize;
-
-    if(!responder_send_buffer(message_bus_ptr->responder, &reg_payload, sizeof (struct payload)))
-    {
-        return false;
-    }
-
-    if(!responder_send_buffer(message_bus_ptr->responder, messagebuffer, (size_t)buffersize))
-    {
-        return false;
-    }
-
-    return true;
 }
 
 void* responder_run(void* ptr)
@@ -223,7 +247,7 @@ void* responder_run(void* ptr)
         payload message = {0};
         char* buffer = (char*)&message;
 
-        if(responder_receive_buffer(message_bus_ptr->responder,  &buffer, sizeof (struct payload), false))
+        if(responder_receive_buffer(message_bus_ptr->responder,  &buffer, sizeof (struct payload) - sizeof (void*), false))
         {
             if(message.data_size > 0)
             {
