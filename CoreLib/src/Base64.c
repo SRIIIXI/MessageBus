@@ -43,7 +43,7 @@ const char encodingtable[] = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
 const int modulustable[] = { 0, 2, 1 };
 
 
-void base64_encode(const unsigned char *data, unsigned long inputlength, char *encodedString, unsigned long *outputlength)
+char *base64_encode(const unsigned char *data, unsigned long inputlength, char *encodedString, unsigned long *outputlength)
 {
 	*outputlength = 4 * ((inputlength + 2) / 3);
 
@@ -52,7 +52,7 @@ void base64_encode(const unsigned char *data, unsigned long inputlength, char *e
 	if (encodedString == NULL)
 	{
 		outputlength = 0;
-		return;
+        return NULL;
 	}
 
 	for (unsigned int i = 0, j = 0; i < inputlength;)
@@ -75,11 +75,11 @@ void base64_encode(const unsigned char *data, unsigned long inputlength, char *e
 		encodedString[*outputlength - 1 - i] = '=';
 	}
 
-	return;
+    return encodedString;
 }
 
 
-void base64_decode(const char *encodedString, unsigned long inputlength, unsigned char *decodedData, unsigned long *outputlength)
+unsigned char *base64_decode(const char *encodedString, unsigned long inputlength, unsigned char *decodedData, unsigned long *outputlength)
 {
 	char decodingtable[256] = { 0 };
 
@@ -88,7 +88,7 @@ void base64_decode(const char *encodedString, unsigned long inputlength, unsigne
 		decodingtable[(unsigned char)encodingtable[i]] = i;
 	}
 
-	if (inputlength % 4 != 0) return;
+    if (inputlength % 4 != 0) return NULL;
 
 	*outputlength = inputlength / 4 * 3;
 
@@ -100,7 +100,7 @@ void base64_decode(const char *encodedString, unsigned long inputlength, unsigne
 	if (decodedData == NULL)
 	{
 		*outputlength = 0;
-		return;
+        return NULL;
 	}
 
 	for (unsigned int i = 0, j = 0; i < inputlength;)
@@ -120,5 +120,5 @@ void base64_decode(const char *encodedString, unsigned long inputlength, unsigne
 		if (j < *outputlength) decodedData[j++] = (triple >> 0 * 8) & 0xFF;
 	}
 
-	return;
+    return decodedData;
 }

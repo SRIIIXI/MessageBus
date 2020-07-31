@@ -10,6 +10,7 @@ link_libraries(rt pthread dl)
 
 set(SOURCE
 ${SOURCE}
+../../CoreLib/src/Base64.c
 ../../CoreLib/src/StringEx.c
 ../../CoreLib/src/StringList.c
 ../../CoreLib/src/Responder.c
@@ -19,6 +20,7 @@ ${SOURCE}
 
 set(HEADERS
 ${HEADERS}
+../../CoreLib/include/Base64.h
 ../../CoreLib/include/StringEx.h
 ../../CoreLib/include/StringList.h
 ../../CoreLib/include/Responder.h

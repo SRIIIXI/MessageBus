@@ -13,6 +13,7 @@ modification, is allowed only with prior permission from CIMCON Automation
 #include "StringList.h"
 #include "Responder.h"
 #include "Payload.h"
+#include "Base64.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -183,13 +184,26 @@ bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, Messa
         message_bus_ptr->payload_sequence = 1;
     }
 
+    long datalen = 0;
+    void* dataptr = NULL;
+
+    if(dtype == Text)
+    {
+        datalen = buffersize;
+        dataptr = messagebuffer;
+    }
+    else
+    {
+        dataptr = base64_encode(messagebuffer, buffersize, dataptr, &datalen);
+    }
+
     payload data_payload = {0};
 
     data_payload.payload_type = ptype;
     data_payload.payload_sub_type = mtype;
     strcpy(data_payload.sender, message_bus_ptr->process_name);
     strcpy(data_payload.receipient, node_name);
-    data_payload.data_size = buffersize;
+    data_payload.data_size = datalen;
     data_payload.payload_id = message_bus_ptr->payload_sequence;
 
     if(!responder_send_buffer(message_bus_ptr->responder, &data_payload, sizeof (struct payload) - sizeof (void*)))
@@ -197,9 +211,14 @@ bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, Messa
         return false;
     }
 
-    if(!responder_send_buffer(message_bus_ptr->responder, messagebuffer, (size_t)buffersize))
+    if(!responder_send_buffer(message_bus_ptr->responder, dataptr, (size_t)datalen))
     {
         return false;
+    }
+
+    if(dtype != Text)
+    {
+        free(dataptr);
     }
 
     return true;
@@ -251,9 +270,22 @@ void* responder_run(void* ptr)
         {
             if(message.data_size > 0)
             {
-                if(!responder_receive_buffer(message_bus_ptr->responder, &message.data, message.data_size, true))
+                char* databuffer = NULL;
+                if(!responder_receive_buffer(message_bus_ptr->responder, &databuffer, message.data_size, true))
                 {
                     break;
+                }
+
+                if(message.payload_data_type == Text)
+                {
+                    message.data = databuffer;
+                }
+                else
+                {
+                    long decoded_len = 0;
+                    message.data = base64_decode(databuffer, message.data_size, message.data, &decoded_len);
+                    message.data_size = decoded_len;
+                    free(databuffer);
                 }
             }
 
@@ -279,14 +311,14 @@ bool handle_protocol(void* ptr, payload* message)
         return false;
     }
 
-    // We get this once we connect and regsiter ourselves
+    // We get this once we connect and register ourselves
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODELIST)
     {
         str_list_allocate_from_string(message_bus_ptr->peer_node_list, message->data, ",");
         return true;
     }
 
-    // We get this when there is a REGSITER at the server except ours own
+    // We get this when there is a REGISTER at the server except ours own
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODE_ONLINE)
     {
         long long index = str_list_index_of_value(message_bus_ptr->peer_node_list, message->data);
@@ -297,7 +329,7 @@ bool handle_protocol(void* ptr, payload* message)
         }
     }
 
-    // We get this when there is a DEREGSITER at the server
+    // We get this when there is a DEREGISTER at the server
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODE_OFFLINE)
     {
         long long index = str_list_index_of_value(message_bus_ptr->peer_node_list, message->data);
