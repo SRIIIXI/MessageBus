@@ -27,10 +27,10 @@ int main(int argc, char* argv[])
 
     char str[] = "Hello Pumba! I'm Timon";
     long payload_id = 0;
+    int snooze_time = 0;
 
     message_bus_send(message_bus, "Timon", Data, LoopBack, Text, str, strlen(str), &payload_id);
 
-    int snooze_time = 0;
 
     while(snooze_time < 600)
     {

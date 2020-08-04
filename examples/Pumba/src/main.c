@@ -26,7 +26,10 @@ int main(int argc, char* argv[])
     }
 
     char str[] = "Hello Timon! I'm Pumba";
+    long payload_id = 0;
     int snooze_time = 0;
+
+    message_bus_send(message_bus, "Pumba", Data, LoopBack, Text, str, strlen(str), &payload_id);
 
     while(snooze_time < 600)
     {
