@@ -9,7 +9,6 @@
 #define LIBRARY_ENTRY
 #define LIBRARY_EXIT 
 #else
-#define LIBRARY_EXPORT LIBRARY_EXPORT
 #define LIBRARY_EXPORT __attribute__((visibility("default")))
 #define LIBRARY_ENTRY __attribute__((constructor))
 #define LIBRARY_EXIT __attribute__((destructor))
