@@ -30,6 +30,7 @@ modification, is allowed only with prior permission from CIMCON Automation
 #define getpid _getpid
 #else
 #include <unistd.h>
+#include <pthread.h>
 #endif
 
 #pragma push(1)
