@@ -1,8 +1,13 @@
 #include "MessageBusClient.h"
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id);
 
@@ -39,7 +44,12 @@ int main(int argc, char* argv[])
             message_bus_send(message_bus, "Timon", Data, UserData, Text, str, strlen(str), &payload_id);
         }
 
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
         sleep(5);
+        #else
+        Sleep(500);
+        #endif
+
         snooze_time += 5;
     }
 

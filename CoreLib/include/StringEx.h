@@ -29,51 +29,61 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef STRING_EX_C
 #define STRING_EX_C
 
-#include <stddef.h>
+#include <stdint.h>
 #include <stdbool.h>
 
-extern __attribute__((visibility("default"))) wchar_t* strtowstr(const char* str);
-extern __attribute__((visibility("default"))) char* strfromwstr(const wchar_t* wstr);
+#if defined(_WIN32) || defined (WIN32) || defined (_WIN64)
+#define LIBRARY_EXPORT __declspec(dllexport)
+#define LIBRARY_ENTRY
+#define LIBRARY_EXIT 
+#else
+#define LIBRARY_EXPORT __attribute__((visibility("default")))
+#define LIBRARY_ENTRY __attribute__((constructor))
+#define LIBRARY_EXIT __attribute__((destructor))
+#endif 
 
-extern __attribute__((visibility("default"))) char* strfromint(size_t num);
-extern __attribute__((visibility("default"))) char* strfromdouble(double num);
+extern LIBRARY_EXPORT wchar_t* strtowstr(const char* str);
+extern LIBRARY_EXPORT char* strfromwstr(const wchar_t* wstr);
 
-extern __attribute__((visibility("default"))) char* strreverse(char* ptr);
-extern __attribute__((visibility("default"))) char* strsegmentreverse(char* str, size_t start, size_t term);
+extern LIBRARY_EXPORT char* strfromint(size_t num);
+extern LIBRARY_EXPORT char* strfromdouble(double num);
 
-extern __attribute__((visibility("default"))) long long strindexofsubstr(char* str, const char* substr);
-extern __attribute__((visibility("default"))) long long strindexofchar(char* str, const char ch);
+extern LIBRARY_EXPORT char* strreverse(char* ptr);
+extern LIBRARY_EXPORT char* strsegmentreverse(char* str, size_t start, size_t term);
 
-extern __attribute__((visibility("default"))) size_t strcountsubstr(char* str, const char* substr);
-extern __attribute__((visibility("default"))) size_t strcountchar(char* str, const char ch);
+extern LIBRARY_EXPORT long long strindexofsubstr(char* str, const char* substr);
+extern LIBRARY_EXPORT long long strindexofchar(char* str, const char ch);
 
-extern __attribute__((visibility("default"))) char* strtolower(char* str);
-extern __attribute__((visibility("default"))) char* strtoupper(char* str);
+extern LIBRARY_EXPORT size_t strcountsubstr(char* str, const char* substr);
+extern LIBRARY_EXPORT size_t strcountchar(char* str, const char ch);
 
-extern __attribute__((visibility("default"))) char* strlefttrim(char* str);
-extern __attribute__((visibility("default"))) char* strrighttrim(char* str);
-extern __attribute__((visibility("default"))) char* stralltrim(char* str);
+extern LIBRARY_EXPORT char* strtolower(char* str);
+extern LIBRARY_EXPORT char* strtoupper(char* str);
 
-extern __attribute__((visibility("default"))) char* strremsubstrfirst(char* str, const char* substr);
-extern __attribute__((visibility("default"))) char* strremsubstrall(char* str, const char* substr);
-extern __attribute__((visibility("default"))) char* strremsubstrat(char* str, size_t pos, size_t len);
+extern LIBRARY_EXPORT char* strlefttrim(char* str);
+extern LIBRARY_EXPORT char* strrighttrim(char* str);
+extern LIBRARY_EXPORT char* stralltrim(char* str);
 
-extern __attribute__((visibility("default"))) char* strremcharfirst(char* str, const char oldchar);
-extern __attribute__((visibility("default"))) char* strremcharall(char* str, const char oldchar);
-extern __attribute__((visibility("default"))) char* strremcharat(char* str, size_t pos);
+extern LIBRARY_EXPORT char* strremsubstrfirst(char* str, const char* substr);
+extern LIBRARY_EXPORT char* strremsubstrall(char* str, const char* substr);
+extern LIBRARY_EXPORT char* strremsubstrat(char* str, size_t pos, size_t len);
 
-extern __attribute__((visibility("default"))) char* strrepsubstrfirst(char* str, const char* oldsubstr, const char* newsubstr);
-extern __attribute__((visibility("default"))) char* strrepsubstrall(char* str, const char* oldsubstr, const char* newsubstr);
+extern LIBRARY_EXPORT char* strremcharfirst(char* str, const char oldchar);
+extern LIBRARY_EXPORT char* strremcharall(char* str, const char oldchar);
+extern LIBRARY_EXPORT char* strremcharat(char* str, size_t pos);
 
-extern __attribute__((visibility("default"))) char* strrepcharfirst(char* str, const char oldchar, const char newchar);
-extern __attribute__((visibility("default"))) char* strrepcharall(char* str, const char oldchar, const char newchar);
-extern __attribute__((visibility("default"))) char* strrepcharat(char* str, const char newchar, size_t pos);
+extern LIBRARY_EXPORT char* strrepsubstrfirst(char* str, const char* oldsubstr, const char* newsubstr);
+extern LIBRARY_EXPORT char* strrepsubstrall(char* str, const char* oldsubstr, const char* newsubstr);
 
-extern __attribute__((visibility("default"))) void strsplitkeyvalue(const char* str, const char* delimiter, char **key, char **value);
-extern __attribute__((visibility("default"))) char** strsplitsubstr(const char* str, const char* delimiter, size_t *numsubstr);
-extern __attribute__((visibility("default"))) char** strsplitchar(const char* str, const char delimiter, size_t *numsubstr);
-extern __attribute__((visibility("default"))) char* strjoinwithsubstr(const char **strlist, const char* delimiter);
-extern __attribute__((visibility("default"))) char* strjoinwithchar(const char** strlist, const char delimiter);
-extern __attribute__((visibility("default"))) void  strfreelist(char** strlist, size_t numsubstr);
+extern LIBRARY_EXPORT char* strrepcharfirst(char* str, const char oldchar, const char newchar);
+extern LIBRARY_EXPORT char* strrepcharall(char* str, const char oldchar, const char newchar);
+extern LIBRARY_EXPORT char* strrepcharat(char* str, const char newchar, size_t pos);
+
+extern LIBRARY_EXPORT void strsplitkeyvalue(const char* str, const char* delimiter, char **key, char **value);
+extern LIBRARY_EXPORT char** strsplitsubstr(const char* str, const char* delimiter, size_t *numsubstr);
+extern LIBRARY_EXPORT char** strsplitchar(const char* str, const char delimiter, size_t *numsubstr);
+extern LIBRARY_EXPORT char* strjoinwithsubstr(const char **strlist, const char* delimiter);
+extern LIBRARY_EXPORT char* strjoinwithchar(const char** strlist, const char delimiter);
+extern LIBRARY_EXPORT void  strfreelist(char** strlist, size_t numsubstr);
 
 #endif

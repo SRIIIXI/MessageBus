@@ -35,7 +35,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <string.h>
 #include <time.h>
 #include <stdint.h>
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+#include <Windows.h>
+#include <process.h>
+#define pid_t int
+#define getpid _getpid
+#else
 #include <unistd.h>
+#endif
 
 #define END_OF_LINE "\n"
 #define MAX_LOGGERS 512

@@ -30,12 +30,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Directory.h"
 
 #define DIRECTORY_SEPARATOR '/'
-#include <dirent.h>
-#include <unistd.h>
+
 #include <sys/stat.h>
 
 #include <stdlib.h>
 #include <memory.h>
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+#include <Windows.h>
+#else
+#include <dirent.h>
+#include <unistd.h>
+#endif
 
 char* dir_get_parent_directory(const char* dirname)
 {
@@ -73,6 +79,26 @@ char* dir_get_parent_directory(const char* dirname)
 	return parent_dir;
 }
 
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+
+bool dir_is_exists(const char* dirname)
+{
+	DWORD attr = GetFileAttributesA(dirname);
+
+	if (attr == INVALID_FILE_ATTRIBUTES)
+	{
+		return false;
+	}
+	return true;
+}
+
+bool dir_create_directory(const char* dirname)
+{
+	return _mkdir(dirname);
+}
+
+#else
+
 bool dir_is_exists(const char* dirname)
 {
 	DIR* dirp;
@@ -95,3 +121,4 @@ bool dir_create_directory(const char* dirname)
 	return mkdir(dirname, S_IRWXU);
 }
 
+#endif

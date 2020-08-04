@@ -11,7 +11,11 @@ set(MessageBus_VERSION_MINOR 0)
 include_directories(./include/ ../CoreLib/include /include/ /usr/include/ /usr/local/include/)
 link_directories(./lib/ /lib /usr/lib/ /usr/local/lib/ /usr/lib/${CMAKE_SYSTEM_PROCESSOR}/)
 
+if(WIN32)
+link_libraries(ws2_32)
+else()
 link_libraries(rt pthread dl)
+endif()
 
 set(SOURCE
 ${SOURCE}
@@ -29,6 +33,7 @@ ${SOURCE}
 
 set(HEADERS
 ${HEADERS}
+../CoreLib/include/OSDefinitions.h
 ../CoreLib/include/Base64.h
 ../CoreLib/include/Logger.h
 ../CoreLib/include/SignalHandler.h

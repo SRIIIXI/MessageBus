@@ -29,8 +29,21 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef BASE_64_C
 #define BASE_64_C
 
-extern __attribute__((visibility("default"))) char* base64_encode(const unsigned char *data, unsigned long inputlength, char *encodedString, unsigned long *outputlength);
-extern __attribute__((visibility("default"))) unsigned char* base64_decode(const char *encodedString, unsigned long inputlength, unsigned char *decodedData, unsigned long *outputlength);
+#include <stdint.h>
+#include <stdbool.h>
+
+#if defined(_WIN32) || defined (WIN32) || defined (_WIN64)
+#define LIBRARY_EXPORT __declspec(dllexport)
+#define LIBRARY_ENTRY
+#define LIBRARY_EXIT 
+#else
+#define LIBRARY_EXPORT __attribute__((visibility("default")))
+#define LIBRARY_ENTRY __attribute__((constructor))
+#define LIBRARY_EXIT __attribute__((destructor))
+#endif 
+
+extern LIBRARY_EXPORT char* base64_encode(const unsigned char *data, unsigned long inputlength, char *encodedString, unsigned long *outputlength);
+extern LIBRARY_EXPORT unsigned char* base64_decode(const char *encodedString, unsigned long inputlength, unsigned char *decodedData, unsigned long *outputlength);
 
 
 #endif

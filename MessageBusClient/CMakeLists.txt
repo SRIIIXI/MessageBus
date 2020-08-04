@@ -10,6 +10,12 @@ set(MessageBus_VERSION_MINOR 0)
 
 include_directories(./include ../CoreLib/include ../MessageBus/include /include/ /usr/include/ /usr/local/include/)
 
+if(WIN32)
+link_libraries(ws2_32)
+else()
+link_libraries(rt pthread dl)
+endif()
+
 set(SOURCE
 ${SOURCE}
 ../CoreLib/src/Base64.c
@@ -21,6 +27,7 @@ ${SOURCE}
 
 set(HEADERS
 ${HEADERS}
+
 ../CoreLib/include/Base64.h
 ../CoreLib/include/StringEx.h
 ../CoreLib/include/StringList.h

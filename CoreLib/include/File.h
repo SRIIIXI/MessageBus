@@ -29,12 +29,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef FILE_C
 #define FILE_C
 
-#include <stddef.h>
+#include <stdint.h>
 #include <stdbool.h>
 
-extern __attribute__((visibility("default"))) bool file_is_exists(const char* filename);
-extern __attribute__((visibility("default"))) char* file_get_parent_directory(const char* filename);
-extern __attribute__((visibility("default"))) char* file_get_basename(const char* filename);
-extern __attribute__((visibility("default"))) char* file_get_extension(const char* filename);
+#if defined(_WIN32) || defined (WIN32) || defined (_WIN64)
+#define LIBRARY_EXPORT __declspec(dllexport)
+#define LIBRARY_ENTRY
+#define LIBRARY_EXIT 
+#else
+#define LIBRARY_EXPORT __attribute__((visibility("default")))
+#define LIBRARY_ENTRY __attribute__((constructor))
+#define LIBRARY_EXIT __attribute__((destructor))
+#endif 
+
+extern LIBRARY_EXPORT bool file_is_exists(const char* filename);
+extern LIBRARY_EXPORT char* file_get_parent_directory(const char* filename);
+extern LIBRARY_EXPORT char* file_get_basename(const char* filename);
+extern LIBRARY_EXPORT char* file_get_extension(const char* filename);
 
 #endif

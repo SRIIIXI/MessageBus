@@ -6,7 +6,11 @@ project(${Project})
 
 include_directories(./include/ ../../CoreLib/include/ ../../MessageBus/include/ ../../MessageBusClient/include/ /include/ /usr/include/ /usr/local/include/)
 
+if(WIN32)
+link_libraries(ws2_32)
+else()
 link_libraries(rt pthread dl)
+endif()
 
 set(SOURCE
 ${SOURCE}

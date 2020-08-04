@@ -5,21 +5,27 @@
 #include "Payload.h"
 #include "SignalHandler.h"
 
-#include <pthread.h>
 #include <memory.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <sys/types.h>
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
 #include <memory.h>
 #include <stdlib.h>
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+#include <WinSock2.h>
+#include <Windows.h>
+#else
+#include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#endif
 
 #define INVALID_SOCKET (-1)
 #define SOCKET_ERROR	 (-1)
@@ -32,7 +38,7 @@
 
 static void on_signal_received(SignalType type);
 static void *responder_run(void* responder_thread_params);
-static void payload_handle_protocol(payload* message, void* vptr_responder);
+static bool payload_handle_protocol(payload* message, void* vptr_responder);
 static bool payload_receive(payload* message, void* vptr_responder);
 static bool payload_send(payload* message, void* vptr_responder);
 
@@ -40,12 +46,25 @@ static int listener_socket = INVALID_SOCKET;
 static int listener_port = -1;
 static size_t logger_id = 0;
 
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+static int addrlen;
+#else
 static socklen_t addrlen;
-static pthread_mutex_t socket_mutex;
+#endif
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+static CRITICAL_SECTION socket_lock;
+#else
+static pthread_mutex_t socket_lock;
+#endif
 
 typedef struct responder_thread_params
 {
-    pthread_t thread;
+    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+        HANDLE thread;
+    #else
+        pthread_t thread;
+    #endif
     void* responder;
 }responder_thread_params;
 
@@ -67,14 +86,36 @@ bool broker_initialize(char* appname, int port)
     signals_register_callback(on_signal_received);
     signals_initialize_handlers();
 
-    pthread_mutex_init(&socket_mutex, NULL);
+    #if defined(_WIN32) || defined(WIN32)
+        WSACleanup();
+        WSADATA WSData;
+        long nRc = WSAStartup(0x0202, &WSData);
+        if (nRc != 0)
+        {
+            return false;
+        }
+        if (WSData.wVersion != 0x0202)
+        {
+            WSACleanup();
+            return false;
+        }
+    #endif
+
+    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+    if (!InitializeCriticalSectionAndSpinCount(&socket_lock, 0x00000400))
+    {
+        return false;
+    }
+    #else
+        pthread_mutex_init(&socket_lock, NULL);
+    #endif
 
     return true;
 }
 
 bool broker_run()
 {
-    listener_socket = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+    listener_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
     struct sockaddr_in bindAddr;
 
@@ -106,6 +147,18 @@ bool broker_run()
             struct responder_thread_params* params = (responder_thread_params*)calloc(1, sizeof (struct responder_thread_params));
             params->responder = responder_assign_socket(params->responder, client_sock);
 
+            #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+
+            int thread_id = 0;
+            params->thread = CreateThread(NULL, NULL, &responder_run, (LPVOID)params, CREATE_SUSPENDED, &thread_id);
+            if (params->thread == NULL)
+            {
+                return false;
+            }
+            ResumeThread(params->thread);
+
+            #else
+
             pthread_attr_t pthread_attr;
             memset(&pthread_attr, 0, sizeof(pthread_attr_t));
             // default threading attributes
@@ -118,6 +171,8 @@ bool broker_run()
                 free(params);
                 continue;
             }
+
+            #endif
         }
         else
         {
@@ -133,26 +188,47 @@ void broker_stop()
 {
     shutdown(listener_socket, 2);
     close(listener_socket);
-    pthread_mutex_destroy(&socket_mutex);
+
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_mutex_destroy(&socket_lock);
+    #else
+        DeleteCriticalSection(&socket_lock);
+    #endif
+
+    #if defined(_WIN32) || defined(WIN32)
+            WSACleanup();
+    #endif
 }
 
 void* responder_run(void* responder_thread_params)
 {
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
     pthread_detach(pthread_self());
+    #endif
 
     struct responder_thread_params* params = (struct responder_thread_params*)responder_thread_params;
 
     if(params == NULL)
     {
-        pthread_exit(NULL);
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+            pthread_exit(NULL);
+        #else
+            ExitThread(0);
+        #endif
+
         return NULL;
     }
 
     if(params->responder == NULL)
     {
-        pthread_cancel(params->thread);
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+            pthread_cancel(params->thread);
+            pthread_exit(NULL);                
+        #else
+            ExitThread(0);
+        #endif
         free(responder_thread_params);
-        pthread_exit(NULL);
+
         return NULL;
     }
 
@@ -162,8 +238,17 @@ void* responder_run(void* responder_thread_params)
 
         if(payload_receive(&client_payload, params->responder))
         {
-            payload_handle_protocol(&client_payload, params->responder);
-            free(client_payload.data);
+            bool ret = payload_handle_protocol(&client_payload, params->responder);
+
+            if (client_payload.data_size > 0 && client_payload.data != NULL)
+            {
+                free(client_payload.data);
+            }
+
+            if (!ret)
+            {
+                break;
+            }
         }
         else
         {
@@ -171,35 +256,26 @@ void* responder_run(void* responder_thread_params)
         }
     }
 
-    pthread_cancel(params->thread);
-
-    // Lock this section for responder array update
-
-    pthread_mutex_lock(&socket_mutex);
-
-    int curr_socket = responder_get_socket(params->responder);
-    client_node* ptr = client_node_array[curr_socket];
-    printf("NODE EXIT: %s\n", ptr->node_name);
-
-    responder_close_socket(params->responder);
-    client_node_array[curr_socket] = NULL;
-
-    pthread_mutex_unlock(&socket_mutex);
-
-    // Responder array update complete
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_cancel(params->thread);
+    #endif
 
     free(params);
 
-    pthread_exit(NULL);
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_exit(NULL);
+    #else
+       ExitThread(0);
+    #endif
 }
 
-void payload_handle_protocol(payload* message, void* vptr_responder)
+bool payload_handle_protocol(payload* message, void* vptr_responder)
 {
     struct responder* responder_ptr = (struct responder*)vptr_responder;
 
     if(!responder_ptr)
     {
-        return;
+        return false;
     }
 
     int sender_socket = responder_get_socket(responder_ptr);
@@ -207,7 +283,11 @@ void payload_handle_protocol(payload* message, void* vptr_responder)
     // Event => Registration
     if(message->payload_type == PAYLOAD_TYPE_EVENT && message->payload_sub_type == PAYLOAD_SUB_TYPE_REGISTER)
     {
-        pthread_mutex_lock(&socket_mutex);
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_lock(&socket_lock);
+        #else
+                EnterCriticalSection(&socket_lock);
+        #endif
 
         // Make sure that the registration request is from a new node
         client_node* new_node = client_node_array[sender_socket];
@@ -270,14 +350,23 @@ void payload_handle_protocol(payload* message, void* vptr_responder)
             free(node_list_message.data);
         }
 
-        pthread_mutex_unlock(&socket_mutex);
-        return;
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_unlock(&socket_lock);
+        #else
+                LeaveCriticalSection(&socket_lock);
+        #endif
+
+        return true;
     }
 
     // Event => Deregistration
     if(message->payload_type == PAYLOAD_TYPE_EVENT && message->payload_sub_type == PAYLOAD_SUB_TYPE_DEREGISTER)
     {
-        pthread_mutex_lock(&socket_mutex);
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_lock(&socket_lock);
+        #else
+                EnterCriticalSection(&socket_lock);
+        #endif
 
         client_node* old_node = client_node_array[sender_socket];
 
@@ -317,21 +406,30 @@ void payload_handle_protocol(payload* message, void* vptr_responder)
             client_node_array[sender_socket] = NULL;
         }
 
-        pthread_mutex_unlock(&socket_mutex);
-        return;
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_unlock(&socket_lock);
+        #else
+                LeaveCriticalSection(&socket_lock);
+        #endif
+
+        return false;
     }
 
     //Loopback
     if(message->payload_type == PAYLOAD_TYPE_DATA && message->payload_sub_type == PAYLOAD_SUB_TYPE_LOOPBACK)
     {
         payload_send(message, responder_ptr);
-        return;
+        return true;
     }
 
     // All other payload types that carry trailing data buffers
     if(message->payload_type == PAYLOAD_TYPE_DATA || message->payload_type == PAYLOAD_TYPE_REQUEST || message->payload_type == PAYLOAD_TYPE_RESPONSE || message->payload_type ==  PAYLOAD_TYPE_EVENT)
     {
-        pthread_mutex_lock(&socket_mutex);
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_lock(&socket_lock);
+        #else
+                EnterCriticalSection(&socket_lock);
+        #endif
 
         for(size_t index = 0; index < MAX_RESPONDERS; index++)
         {
@@ -347,8 +445,13 @@ void payload_handle_protocol(payload* message, void* vptr_responder)
             }
         }
 
-        pthread_mutex_unlock(&socket_mutex);
-        return;
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_unlock(&socket_lock);
+        #else
+                LeaveCriticalSection(&socket_lock);
+        #endif
+
+        return true;
     }
 }
 

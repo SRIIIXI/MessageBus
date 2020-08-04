@@ -3,15 +3,26 @@
 #include "StringList.h"
 
 #include <memory.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+#include <WinSock2.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <ctype.h>
-#include <stdlib.h>
-#include <errno.h>
+#endif
+
+#if defined(_MSC_VER) && defined(_WIN32)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
 
 #define INVALID_SOCKET (-1)
 #define SOCKET_ERROR	 (-1)
@@ -217,7 +228,12 @@ bool responder_close_socket(void* ptr)
     }
 
     shutdown(responder_ptr->socket, 2);
-    close(responder_ptr->socket);
+
+    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+        closesocket(responder_ptr->socket);
+    #else
+        close(responder_ptr->socket);
+    #endif
 
     responder_ptr->connected = false;
     free(responder_ptr);
@@ -240,7 +256,7 @@ bool responder_receive_buffer(void* ptr, char** iobuffer, size_t len, bool alloc
 
     if(alloc_buffer)
     {
-        *iobuffer = (char*)calloc(1, len);
+        *iobuffer = (char*)calloc(1, len + 1);
     }
 
     if(responder_ptr->prefetched_buffer_size > 0)

@@ -1,4 +1,5 @@
 # User settings
+CMakeSettings.json
 *.user
 
 # Prerequisites
@@ -58,3 +59,5 @@ dkms.conf
 temp/
 release/
 debug/
+.vs/
+out/
