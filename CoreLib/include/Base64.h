@@ -31,6 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #if defined(_WIN32) || defined (WIN32) || defined (_WIN64)
 #define LIBRARY_EXPORT __declspec(dllexport)
