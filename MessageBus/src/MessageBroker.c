@@ -178,6 +178,7 @@ void* responder_run(void* responder_thread_params)
     pthread_mutex_lock(&socket_mutex);
 
     int curr_socket = responder_get_socket(params->responder);
+    printf("NODE EXIT: %s\n", client_node_array[curr_socket].node_name);
     responder_close_socket(params->responder);
     client_node_array[curr_socket] = NULL;
 
