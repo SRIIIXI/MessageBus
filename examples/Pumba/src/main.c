@@ -15,6 +15,21 @@ int main(int argc, char* argv[])
 {
     void* message_bus = NULL;
 
+    #if defined(_WIN32) || defined(WIN32)
+        WSACleanup();
+        WSADATA WSData;
+        long nRc = WSAStartup(0x0202, &WSData);
+        if (nRc != 0)
+        {
+            return false;
+        }
+        if (WSData.wVersion != 0x0202)
+        {
+            WSACleanup();
+            return false;
+        }
+    #endif
+
     if(!message_bus_initialize(&message_bus, network_event))
     {
         return -1;
@@ -55,6 +70,10 @@ int main(int argc, char* argv[])
 
     message_bus_deregister(message_bus);
     message_bus_close(message_bus);
+
+    #if defined(_WIN32) || defined(WIN32)
+        WSACleanup();
+    #endif
 
     return 0;
 }

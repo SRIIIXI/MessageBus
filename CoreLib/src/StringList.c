@@ -62,7 +62,10 @@ extern bool str_node_is_less(StringNode* first, StringNode* second);
 
 void * str_list_allocate(void* lptr)
 {
-    lptr = (StringList*)calloc(1, sizeof(StringList));
+    StringList*  ptr = (StringList*)calloc(1, sizeof(StringList));
+
+    lptr = ptr;
+
     return lptr;
 }
 
@@ -429,6 +432,11 @@ long long str_list_index_of_value(void* lptr, char* data)
 
     ptr = str_list_get_first(lptr);
 
+    if (!ptr)
+    {
+        return -1;
+    }
+
     long long idx = 0;
 
     if(strcmp(ptr, data) == 0)
@@ -438,12 +446,13 @@ long long str_list_index_of_value(void* lptr, char* data)
 
     while(true)
     {
+        ptr = str_list_get_next(lptr);
+
         if(ptr == NULL)
         {
             break;
-        }
-
-        ptr = str_list_get_next(lptr);
+        }        
+        
         idx++;
 
         if(strcmp(ptr, data) == 0)
@@ -490,6 +499,12 @@ char* str_list_get_first(void* lptr)
     }
 
     ((StringList*)lptr)->IteratorPosition = ((StringList*)lptr)->Head;
+
+    if (((StringList*)lptr)->IteratorPosition == NULL)
+    {
+        return NULL;
+    }
+
     return ((StringList*)lptr)->IteratorPosition->NodeData;
 }
 
@@ -506,6 +521,12 @@ char* str_list_get_next(void* lptr)
     }
 
     ((StringList*)lptr)->IteratorPosition = ((StringList*)lptr)->IteratorPosition->Next;
+
+    if (((StringList*)lptr)->IteratorPosition == NULL)
+    {
+        return NULL;
+    }
+
     return ((StringList*)lptr)->IteratorPosition->NodeData;
 }
 
@@ -517,6 +538,12 @@ char* str_list_get_last(void* lptr)
     }
 
     ((StringList*)lptr)->IteratorPosition = ((StringList*)lptr)->Tail;
+
+    if (((StringList*)lptr)->IteratorPosition == NULL)
+    {
+        return NULL;
+    }
+
     return ((StringList*)lptr)->IteratorPosition->NodeData;
 }
 
@@ -533,6 +560,12 @@ char* str_list_get_previous(void* lptr)
     }
 
     ((StringList*)lptr)->IteratorPosition = ((StringList*)lptr)->IteratorPosition->Previous;
+
+    if (((StringList*)lptr)->IteratorPosition == NULL)
+    {
+        return NULL;
+    }
+
     return ((StringList*)lptr)->IteratorPosition->NodeData;
 }
 

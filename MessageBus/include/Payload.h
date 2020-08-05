@@ -27,6 +27,7 @@
 #define PAYLOAD_DATA_TYPE_IMAGE 'I'
 #define PAYLOAD_DATA_TYPE_AUDIO 'A'
 #define PAYLOAD_DATA_TYPE_RAW 'R'
+#define PAYLOAD_DATA_TYPE_TEXT 'T'
 
 #pragma push(1)
 typedef struct payload

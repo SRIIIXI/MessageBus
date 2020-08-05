@@ -306,6 +306,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
         struct payload node_list_message = {0};
         node_list_message.payload_type = PAYLOAD_TYPE_EVENT;
         node_list_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODELIST;
+        node_list_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
         strcpy(node_list_message.receipient, message->sender);
         strcpy(node_list_message.sender, "MessageBus");
 
@@ -326,10 +327,11 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
             struct payload node_online_message = {0};
             node_online_message.payload_type = PAYLOAD_TYPE_EVENT;
             node_online_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_ONLINE;
+            node_online_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
             strcpy(node_online_message.receipient, ptr->node_name);
             strcpy(node_online_message.sender, "MessageBus");
             node_online_message.data_size = strlen(message->sender);
-            node_online_message.data = calloc(1, node_online_message.data_size + 1);
+            node_online_message.data = calloc(1, node_online_message.data_size + (size_t)1);
             strcpy((char*)node_online_message.data, message->sender);
 
             node_list_message.data = realloc(node_list_message.data, strlen(ptr->node_name) + 2);
@@ -391,6 +393,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
                 struct payload node_offline_message;
                 node_offline_message.payload_type = PAYLOAD_TYPE_EVENT;
                 node_offline_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_OFFLINE;
+                node_offline_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
                 strcpy(node_offline_message.receipient, ptr->node_name);
                 strcpy(node_offline_message.sender, "MessageBus");
                 node_offline_message.data_size = strlen(message->sender);

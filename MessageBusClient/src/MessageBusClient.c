@@ -51,6 +51,12 @@ typedef struct message_bus
     bool loop;
 }message_bus;
 
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+static CRITICAL_SECTION socket_lock;
+#else
+static pthread_mutex_t socket_lock;
+#endif
+
 static bool read_current_process_name(void* ptr);
 static void* responder_run(void* ptr);
 static bool handle_protocol(void* ptr, payload* message);
@@ -76,8 +82,17 @@ bool message_bus_initialize(void** pptr, messabus_bus_callback callback)
     read_current_process_name(message_bus_ptr);
     message_bus_ptr->payload_sequence = 0;
     message_bus_ptr->loop = true;
-
+    message_bus_ptr->peer_node_list = str_list_allocate(message_bus_ptr->peer_node_list);
     message_bus_ptr->responder = responder_create_socket(&message_bus_ptr->responder, message_bus_ptr->message_bus_host, message_bus_ptr->message_bus_port);
+
+    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+        if (!InitializeCriticalSectionAndSpinCount(&socket_lock, 0x00000400))
+        {
+            return false;
+        }
+    #else
+        pthread_mutex_init(&socket_lock, NULL);
+    #endif
 
     if(!message_bus_ptr->responder)
     {
@@ -139,7 +154,19 @@ bool message_bus_close(void* ptr)
         return false;
     }
 
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_mutex_lock(&socket_lock);
+    #else
+        EnterCriticalSection(&socket_lock);
+    #endif
+
     message_bus_ptr->loop = false;
+
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_mutex_unlock(&socket_lock);
+    #else
+        LeaveCriticalSection(&socket_lock);
+    #endif
 
     return true;
 }
@@ -265,7 +292,19 @@ bool message_bus_has_node(void* ptr, const char* node_name)
         return NULL;
     }
 
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_mutex_lock(&socket_lock);
+    #else
+        EnterCriticalSection(&socket_lock);
+    #endif
+
     long index = str_list_index_of_value(message_bus_ptr->peer_node_list, node_name);
+
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_mutex_unlock(&socket_lock);
+    #else
+        LeaveCriticalSection(&socket_lock);
+    #endif
 
     if(index > -1)
     {
@@ -356,30 +395,81 @@ bool handle_protocol(void* ptr, payload* message)
     // We get this once we connect and register ourselves
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODELIST)
     {
-        str_list_allocate_from_string(message_bus_ptr->peer_node_list, message->data, ",");
+
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_lock(&socket_lock);
+        #else
+                EnterCriticalSection(&socket_lock);
+        #endif
+
+        void* temp_list = NULL;
+
+        temp_list = str_list_allocate_from_string(temp_list, message->data, ",");
+
+        char* str = str_list_get_first(temp_list);
+
+        while (str)
+        {
+            str_list_add_to_tail(message_bus_ptr->peer_node_list, str);
+
+            char* str = str_list_get_next(temp_list);
+        }
+
+        str_list_clear(message_bus_ptr->peer_node_list);
+
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_unlock(&socket_lock);
+        #else
+                LeaveCriticalSection(&socket_lock);
+        #endif
+
         return true;
     }
 
     // We get this when there is a REGISTER at the server except ours own
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODE_ONLINE)
     {
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_lock(&socket_lock);
+        #else
+                EnterCriticalSection(&socket_lock);
+        #endif
+
         long long index = str_list_index_of_value(message_bus_ptr->peer_node_list, message->data);
 
         if(index < 0)
         {
             str_list_add_to_tail(message_bus_ptr->peer_node_list, message->data);
         }
+
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_unlock(&socket_lock);
+        #else
+                LeaveCriticalSection(&socket_lock);
+        #endif
     }
 
     // We get this when there is a DEREGISTER at the server
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODE_OFFLINE)
     {
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_lock(&socket_lock);
+        #else
+                EnterCriticalSection(&socket_lock);
+        #endif
+
         long long index = str_list_index_of_value(message_bus_ptr->peer_node_list, message->data);
 
         if(index > 1)
         {
             str_list_remove_at(message_bus_ptr->peer_node_list, index);
         }
+
+        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                pthread_mutex_unlock(&socket_lock);
+        #else
+                LeaveCriticalSection(&socket_lock);
+        #endif
     }
 
     message_bus_ptr->callback_ptr(message->sender, message->payload_type, message->payload_sub_type, message->payload_data_type, message->data, message->data_size, message->payload_id);
