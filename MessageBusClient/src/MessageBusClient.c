@@ -298,7 +298,7 @@ bool message_bus_has_node(void* ptr, const char* node_name)
         EnterCriticalSection(&socket_lock);
     #endif
 
-    long index = str_list_index_of_value(message_bus_ptr->peer_node_list, node_name);
+    long index = str_list_index_of(message_bus_ptr->peer_node_list, node_name);
 
     #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
         pthread_mutex_unlock(&socket_lock);
@@ -395,7 +395,6 @@ bool handle_protocol(void* ptr, payload* message)
     // We get this once we connect and register ourselves
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODELIST)
     {
-
         #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
                 pthread_mutex_lock(&socket_lock);
         #else
@@ -415,7 +414,10 @@ bool handle_protocol(void* ptr, payload* message)
             char* str = str_list_get_next(temp_list);
         }
 
-        str_list_clear(message_bus_ptr->peer_node_list);
+        if (temp_list)
+        {
+            str_list_clear(temp_list);
+        }
 
         #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
                 pthread_mutex_unlock(&socket_lock);
@@ -435,7 +437,7 @@ bool handle_protocol(void* ptr, payload* message)
                 EnterCriticalSection(&socket_lock);
         #endif
 
-        long long index = str_list_index_of_value(message_bus_ptr->peer_node_list, message->data);
+        long long index = str_list_index_of(message_bus_ptr->peer_node_list, message->data);
 
         if(index < 0)
         {
@@ -458,7 +460,7 @@ bool handle_protocol(void* ptr, payload* message)
                 EnterCriticalSection(&socket_lock);
         #endif
 
-        long long index = str_list_index_of_value(message_bus_ptr->peer_node_list, message->data);
+        long long index = str_list_index_of(message_bus_ptr->peer_node_list, message->data);
 
         if(index > 1)
         {

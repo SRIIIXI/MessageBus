@@ -368,7 +368,7 @@ void str_list_remove_at(void* lptr, size_t pos)
     }
 }
 
-size_t str_list_index_of(void *lptr, const char* node)
+long long str_list_index_of(void *lptr, const char* node)
 {
     if(lptr == NULL)
     {
@@ -377,29 +377,24 @@ size_t str_list_index_of(void *lptr, const char* node)
 
     char* ptr = NULL;
 
-    ptr = str_list_get_first(lptr);
+    long long idx = 0;
 
-    size_t idx = 0;
-
-    if(strcmp(ptr, node) == 0)
+    if (((StringList*)lptr)->Head == NULL)
     {
-        return idx;
+        return -1;
     }
 
-    while(true)
+    StringNode* curptr = ((StringList*)lptr)->Head;
+
+    while (curptr)
     {
-        if(ptr == NULL)
-        {
-            break;
-        }
-
-        ptr = str_list_get_next(lptr);
-        idx++;
-
-        if(strcmp(ptr, node) == 0)
+        if (strcmp(curptr->NodeData, node) == 0)
         {
             return idx;
         }
+
+        curptr = curptr->Next;
+        idx++;
     }
 
     return -1;
@@ -416,49 +411,6 @@ size_t str_list_item_count(void* lptr)
     if(lptr != NULL)
     {
         return ((StringList*)lptr)->Count;
-    }
-
-    return -1;
-}
-
-long long str_list_index_of_value(void* lptr, char* data)
-{
-    if(lptr == NULL)
-    {
-        return -1;
-    }
-
-    char* ptr = NULL;
-
-    ptr = str_list_get_first(lptr);
-
-    if (!ptr)
-    {
-        return -1;
-    }
-
-    long long idx = 0;
-
-    if(strcmp(ptr, data) == 0)
-    {
-        return idx;
-    }
-
-    while(true)
-    {
-        ptr = str_list_get_next(lptr);
-
-        if(ptr == NULL)
-        {
-            break;
-        }        
-        
-        idx++;
-
-        if(strcmp(ptr, data) == 0)
-        {
-            return idx;
-        }
     }
 
     return -1;
