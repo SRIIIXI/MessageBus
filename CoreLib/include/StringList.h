@@ -59,6 +59,7 @@ extern LIBRARY_EXPORT void str_list_remove_value(void* lptr, char* data);
 
 extern LIBRARY_EXPORT size_t str_list_item_count(void* lptr);
 extern LIBRARY_EXPORT long long str_list_index_of(void* lptr, char* data);
+extern LIBRARY_EXPORT long long str_list_index_of_like(void* lptr, char* data);
 extern LIBRARY_EXPORT char* str_list_get_at(void* lptr, size_t atpos);
 
 extern LIBRARY_EXPORT char* str_list_get_first(void* lptr);

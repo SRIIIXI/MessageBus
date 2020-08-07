@@ -81,7 +81,21 @@ void* str_list_allocate_from_string(void* lptr, const char* str, const char* del
 
     if(substr_count < 1)
     {
-        return NULL;
+        if (str_len < 1)
+        {
+            return NULL;
+        }
+        else
+        {
+            lptr = (StringList*)calloc(1, sizeof(StringList));
+            if (lptr == NULL)
+            {
+                return NULL;
+            }
+
+            str_list_add_to_tail(lptr, str);
+            return lptr;
+        }
     }
 
     char* ptr = (char*)calloc(1, str_len+1);
@@ -399,6 +413,39 @@ long long str_list_index_of(void *lptr, const char* node)
 
     return -1;
 }
+
+long long str_list_index_of_like(void* lptr, const char* node)
+{
+    if (lptr == NULL)
+    {
+        return -1;
+    }
+
+    char* ptr = NULL;
+
+    long long idx = 0;
+
+    if (((StringList*)lptr)->Head == NULL)
+    {
+        return -1;
+    }
+
+    StringNode* curptr = ((StringList*)lptr)->Head;
+
+    while (curptr)
+    {
+        if (strstr(curptr->NodeData, node) == 0)
+        {
+            return idx;
+        }
+
+        curptr = curptr->Next;
+        idx++;
+    }
+
+    return -1;
+}
+
 
 void str_list_remove_value(void* lptr, char* data)
 {  

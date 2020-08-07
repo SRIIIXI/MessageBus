@@ -334,9 +334,25 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
             node_online_message.data = calloc(1, node_online_message.data_size + (size_t)1);
             strcpy((char*)node_online_message.data, message->sender);
 
-            node_list_message.data = realloc(node_list_message.data, strlen(ptr->node_name) + 2);
-            strcat((char*)node_list_message.data, ptr->node_name);
-            strcat((char*)node_list_message.data, ",");
+            if (node_list_message.data == NULL)
+            {
+                size_t len = strlen(ptr->node_name);
+                node_list_message.data = calloc(1, len + 2);
+                strcpy(node_list_message.data, ptr->node_name);
+                ((char*)node_list_message.data)[len] = ',';
+            }
+            else
+            {
+                size_t len = strlen(ptr->node_name) + strlen((char*)node_list_message.data);
+
+                char* temp_buffer = calloc(1, len + 2);
+                strcpy(temp_buffer, (char*)node_list_message.data);
+                strcat(temp_buffer, ptr->node_name);
+                temp_buffer[len] = ',';
+
+                free(node_list_message.data);
+                node_list_message.data = temp_buffer;
+            }
 
             payload_send(&node_online_message, ptr->responder);
             free(node_online_message.data);
