@@ -446,7 +446,6 @@ long long str_list_index_of_like(void* lptr, const char* node)
     return -1;
 }
 
-
 void str_list_remove_value(void* lptr, char* data)
 {  
     size_t index = str_list_index_of(lptr, data);
