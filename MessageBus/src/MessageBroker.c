@@ -25,9 +25,9 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#define INVALID_SOCKET (-1)
 #endif
 
-#define INVALID_SOCKET (-1)
 #define SOCKET_ERROR	 (-1)
 #define LPSOCKADDR sockaddr*
 #define MAX_RESPONDERS 65535
@@ -145,34 +145,47 @@ bool broker_run()
         if(client_sock != INVALID_SOCKET)
         {
             struct responder_thread_params* params = (responder_thread_params*)calloc(1, sizeof (struct responder_thread_params));
-            params->responder = responder_assign_socket(params->responder, client_sock);
 
-            #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-
-            int thread_id = 0;
-            params->thread = CreateThread(NULL, NULL, &responder_run, (LPVOID)params, CREATE_SUSPENDED, &thread_id);
-            if (params->thread == NULL)
+            if (params)
             {
-                return false;
+                params->responder = responder_assign_socket(params->responder, client_sock);
+
+                #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+
+                    int thread_id = 0;
+                    params->thread = CreateThread(NULL, NULL, &responder_run, (LPVOID)params, CREATE_SUSPENDED, &thread_id);
+                    if (params->thread == NULL)
+                    {
+                        return false;
+                    }
+                    ResumeThread(params->thread);
+
+                #else
+
+                    pthread_attr_t pthread_attr;
+                    memset(&pthread_attr, 0, sizeof(pthread_attr_t));
+                    // default threading attributes
+                    pthread_attr_init(&pthread_attr);
+                    // allow a thread to exit cleanly without a join
+                    pthread_attr_setdetachstate(&pthread_attr, PTHREAD_CREATE_DETACHED);
+                    if (pthread_create(&params->thread, &pthread_attr, responder_run, params) != 0)
+                    {
+                        responder_close_socket(params->responder);
+                        free(params);
+                        continue;
+                    }
+
+                #endif
             }
-            ResumeThread(params->thread);
-
-            #else
-
-            pthread_attr_t pthread_attr;
-            memset(&pthread_attr, 0, sizeof(pthread_attr_t));
-            // default threading attributes
-            pthread_attr_init(&pthread_attr);
-            // allow a thread to exit cleanly without a join
-            pthread_attr_setdetachstate (&pthread_attr,PTHREAD_CREATE_DETACHED);
-            if (pthread_create(&params->thread, &pthread_attr, responder_run, params) != 0)
+            else
             {
-                responder_close_socket(params->responder);
-                free(params);
-                continue;
+                shutdown(client_sock, 2);
+                #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+                    closesocket(client_sock);
+                #else
+                    close(client_sock);
+                #endif
             }
-
-            #endif
         }
         else
         {
@@ -187,13 +200,14 @@ bool broker_run()
 void broker_stop()
 {
     shutdown(listener_socket, 2);
-    close(listener_socket);
 
     #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
         pthread_mutex_destroy(&socket_lock);
-    #else
+        close(listener_socket);
+   #else
         DeleteCriticalSection(&socket_lock);
-    #endif
+        closesocket(listener_socket);
+#endif
 
     #if defined(_WIN32) || defined(WIN32)
             WSACleanup();
@@ -295,9 +309,13 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
         if(new_node == NULL)
         {
             new_node = (struct client_node*)calloc(1, sizeof (struct client_node));
-            strcpy(new_node->node_name, message->sender);
-            new_node->responder = responder_ptr;
-            client_node_array[sender_socket] = new_node;
+
+            if (new_node)
+            {
+                strcpy(new_node->node_name, message->sender);
+                new_node->responder = responder_ptr;
+                client_node_array[sender_socket] = new_node;
+            }
         }
 
         // Send Node Online event to all other nodes

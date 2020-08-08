@@ -38,6 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
 #include <Windows.h>
+#include <direct.h>
 #else
 #include <dirent.h>
 #include <unistd.h>

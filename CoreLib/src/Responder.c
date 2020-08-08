@@ -17,6 +17,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#define INVALID_SOCKET (-1)
 #endif
 
 #if defined(_MSC_VER) && defined(_WIN32)
@@ -24,7 +25,6 @@
 typedef SSIZE_T ssize_t;
 #endif
 
-#define INVALID_SOCKET (-1)
 #define SOCKET_ERROR	 (-1)
 #define LPSOCKADDR sockaddr*
 
@@ -204,7 +204,11 @@ bool responder_connect_socket(void* ptr)
 	{
         responder_ptr->error_code = errno;
         shutdown(responder_ptr->socket, 2);
-        close(responder_ptr->socket);
+        #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+                closesocket(responder_ptr->socket);
+        #else
+                close(responder_ptr->socket);
+        #endif
         responder_ptr->connected = false;
 		return false;
 	}

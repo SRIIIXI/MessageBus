@@ -39,8 +39,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
 #include <Windows.h>
 #include <process.h>
+#include <direct.h>
 #define pid_t int
 #define getpid _getpid
+#define getcwd _getcwd
 #else
 #include <unistd.h>
 #endif
