@@ -80,5 +80,5 @@ int main(int argc, char* argv[])
 
 void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id)
 {
-    printf("%s %c %c %s\n", node_name, ptype, mtype, messagebuffer);
+    printf("%s %c %c %c %ld %s %ld\n", node_name, ptype, mtype, dtype, buffersize, messagebuffer, payload_id);
 }

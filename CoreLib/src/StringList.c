@@ -434,7 +434,7 @@ long long str_list_index_of_like(void* lptr, const char* node)
 
     while (curptr)
     {
-        if (strstr(curptr->NodeData, node) == 0)
+        if (strstr(curptr->NodeData, node))
         {
             return idx;
         }

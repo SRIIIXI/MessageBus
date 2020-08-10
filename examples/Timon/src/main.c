@@ -52,12 +52,12 @@ int main(int argc, char* argv[])
     message_bus_send(message_bus, "Timon", Data, LoopBack, Text, str, strlen(str), &payload_id);
 
 
-    while(snooze_time < 600)
+    while(snooze_time < 60000)
     {
-        if(message_bus_has_node(message_bus, "Pumba"))
-        {
-            message_bus_send(message_bus, "Pumba", Data, UserData, Text, str, strlen(str), &payload_id);
-        }
+        //if(message_bus_has_node(message_bus, "Pumba"))
+        //{
+        //    message_bus_send(message_bus, "Pumba", Data, UserData, Text, str, strlen(str), &payload_id);
+        //}
 
         #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
                 sleep(5);
@@ -79,6 +79,5 @@ int main(int argc, char* argv[])
 
 void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long payload_id)
 {
-    printf("network_event\n");
-    printf("%s %c %c %s %ld\n", node_name, ptype, mtype, messagebuffer, payload_id);
+    printf("%s %c %c %c %ld %s %ld\n", node_name, ptype, mtype, dtype, buffersize, messagebuffer, payload_id);
 }
