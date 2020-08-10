@@ -309,5 +309,5 @@ size_t logger_get_instance()
 
 void normalize_function_name(char* func_name)
 {
-
+    
 }

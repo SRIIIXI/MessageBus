@@ -39,7 +39,7 @@ typedef struct payload
     char receipient[32];
     long payload_id;
     long data_size;
-    void* data;
+    char* data;
 }payload;
 #pragma pack(0)
 

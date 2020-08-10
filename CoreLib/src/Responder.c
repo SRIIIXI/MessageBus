@@ -11,12 +11,14 @@
 
 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
 #include <WinSock2.h>
+#include <ws2tcpip.h>
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#define SOCKET int
 #define INVALID_SOCKET (-1)
 #endif
 
@@ -32,7 +34,7 @@ typedef SSIZE_T ssize_t;
 typedef struct responder
 {
     bool			connected;
-    int 			socket;
+    SOCKET 			socket;
     struct sockaddr_in		server_address;
     char			server_name[33];
     int				server_port;
@@ -135,25 +137,20 @@ void* responder_create_socket(void* ptr, const char* servername, int serverport)
 
     if(!ip)
     {
-        nRemoteAddr = inet_addr(responder_ptr->server_name);
-        if (nRemoteAddr == INADDR_NONE)
+        struct hostent* pHE = gethostbyname(responder_ptr->server_name);
+        if (pHE == 0)
         {
-            struct hostent* pHE = gethostbyname(responder_ptr->server_name);
-            if (pHE == 0)
-            {
-                nRemoteAddr = INADDR_NONE;
-                free(ptr);
-                return NULL;
-            }
-            nRemoteAddr = *((u_long*)pHE->h_addr_list[0]);
-            responder_ptr->server_address.sin_addr.s_addr = nRemoteAddr;
+            nRemoteAddr = INADDR_NONE;
+            free(ptr);
+            return NULL;
         }
+        nRemoteAddr = *((u_long*)pHE->h_addr_list[0]);
+        responder_ptr->server_address.sin_addr.s_addr = nRemoteAddr;
     }
     else
     {
          inet_pton (AF_INET, responder_ptr->server_name, &responder_ptr->server_address.sin_addr);
     }
-
 
     responder_ptr->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -283,15 +280,21 @@ bool responder_receive_buffer(void* ptr, char** iobuffer, size_t len, bool alloc
         char*	buffer = 0;
         ssize_t	bytesread = 0;
         buffer = (char*)calloc(1, bytesleft + 1);
-        memset(buffer, 0, bytesleft+1);
 
-        bytesread = recv(responder_ptr->socket, buffer, bytesleft, 0);
+        if (buffer)
+        {
+            bytesread = (ssize_t)recv(responder_ptr->socket, buffer, (int)bytesleft, 0);
+        }
 
         // Error or link down
-        if(bytesread < 1)
+        if(bytesread < 1 || buffer == NULL)
         {
             responder_ptr->error_code = SOCKET_ERROR;
-            free(buffer);
+
+            if (buffer)
+            {
+                free(buffer);
+            }
 
             if(alloc_buffer)
             {

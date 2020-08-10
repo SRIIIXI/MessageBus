@@ -58,8 +58,13 @@ static pthread_mutex_t socket_lock;
 #endif
 
 static bool read_current_process_name(void* ptr);
-static void* responder_run(void* ptr);
 static bool handle_protocol(void* ptr, payload* message);
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+static DWORD WINAPI responder_run(void* responder_thread_params);
+#else
+static void* responder_run(void* responder_thread_params);
+#endif
 
 LIBRARY_ENTRY void library_load()
 {
@@ -74,6 +79,12 @@ LIBRARY_EXIT void library_unload()
 bool message_bus_initialize(void** pptr, messabus_bus_callback callback)
 {
     struct message_bus* message_bus_ptr = (struct message_bus*)calloc(1, sizeof (struct message_bus));
+    
+    if (message_bus_ptr == NULL)
+    {
+        return false;
+    }
+
     *pptr = message_bus_ptr;
 
     strcpy(message_bus_ptr->message_bus_host, "localhost");
@@ -119,7 +130,7 @@ bool message_bus_open(void* ptr)
     #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
 
         int thread_id = 0;
-        message_bus_ptr->thread = CreateThread(NULL, NULL, &responder_run, (LPVOID)message_bus_ptr, CREATE_SUSPENDED, &thread_id);
+        message_bus_ptr->thread = CreateThread(NULL, 0, &responder_run, (LPVOID)message_bus_ptr, CREATE_SUSPENDED, &thread_id);
         if (message_bus_ptr->thread == NULL)
         {
             return false;
@@ -196,7 +207,7 @@ bool message_bus_register(void* ptr)
     reg_payload.data_size = 0;
     reg_payload.payload_id = message_bus_ptr->payload_sequence;
 
-    return responder_send_buffer(message_bus_ptr->responder, &reg_payload, sizeof (struct payload) - sizeof (void*));
+    return responder_send_buffer(message_bus_ptr->responder, &reg_payload, sizeof (struct payload) - sizeof (char*));
 }
 
 bool message_bus_deregister(void* ptr)
@@ -223,7 +234,7 @@ bool message_bus_deregister(void* ptr)
     dereg_payload.data_size = 0;
     dereg_payload.payload_id = message_bus_ptr->payload_sequence;
 
-    return responder_send_buffer(message_bus_ptr->responder, &dereg_payload, sizeof (struct payload) - sizeof (void*));
+    return responder_send_buffer(message_bus_ptr->responder, &dereg_payload, sizeof (struct payload) - sizeof (char*));
 }
 
 // Messaging
@@ -265,7 +276,7 @@ bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, Messa
     data_payload.data_size = datalen;
     data_payload.payload_id = message_bus_ptr->payload_sequence;
 
-    if(!responder_send_buffer(message_bus_ptr->responder, &data_payload, sizeof (struct payload) - sizeof (void*)))
+    if(!responder_send_buffer(message_bus_ptr->responder, &data_payload, sizeof (struct payload) - sizeof (char*)))
     {
         return false;
     }
@@ -289,7 +300,7 @@ bool message_bus_has_node(void* ptr, const char* node_name)
 
     if(message_bus_ptr == NULL)
     {
-        return NULL;
+        return false;
     }
 
     #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
@@ -313,6 +324,75 @@ bool message_bus_has_node(void* ptr, const char* node_name)
 
     return false;
 }
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+
+static DWORD WINAPI responder_run(void* ptr)
+{
+    message_bus* message_bus_ptr = (struct message_bus*)ptr;
+
+    if (message_bus_ptr == NULL)
+    {
+        free(ptr);
+        return 0;
+    }
+
+    if (!responder_is_connected(message_bus_ptr->responder))
+    {
+        free(ptr);
+        return 0;
+    }
+
+    while (true)
+    {
+        payload message = { 0 };
+        char* buffer = (char*)&message;
+
+        if (responder_receive_buffer(message_bus_ptr->responder, &buffer, sizeof(struct payload) - sizeof(char*), false) && message_bus_ptr->loop == true)
+        {
+            if (message.data_size > 0)
+            {
+                char* databuffer = NULL;
+                if (!responder_receive_buffer(message_bus_ptr->responder, &databuffer, message.data_size, true))
+                {
+                    break;
+                }
+
+                databuffer[message.data_size] = 0;
+
+                if (message.payload_data_type == Text)
+                {
+                    message.data = databuffer;
+                }
+                else
+                {
+                    long decoded_len = 0;
+                    message.data = base64_decode(databuffer, message.data_size, message.data, &decoded_len);
+                    message.data_size = decoded_len;
+                    free(databuffer);
+                }
+            }
+
+            handle_protocol(message_bus_ptr, &message);
+
+            if (message.data_size > 0 && message.data != NULL)
+            {
+                free(message.data);
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    responder_close_socket(message_bus_ptr->responder);
+    str_list_clear(message_bus_ptr->peer_node_list);
+    free(message_bus_ptr);
+    return 0;
+}
+
+#else
 
 void* responder_run(void* ptr)
 {
@@ -339,7 +419,7 @@ void* responder_run(void* ptr)
         payload message = {0};
         char* buffer = (char*)&message;
 
-        if(responder_receive_buffer(message_bus_ptr->responder,  &buffer, sizeof (struct payload) - sizeof (void*), false) && message_bus_ptr->loop == true)
+        if(responder_receive_buffer(message_bus_ptr->responder,  &buffer, sizeof (struct payload) - sizeof (char*), false) && message_bus_ptr->loop == true)
         {
             if(message.data_size > 0)
             {
@@ -383,6 +463,8 @@ void* responder_run(void* ptr)
     return NULL;
 }
 
+#endif
+
 bool handle_protocol(void* ptr, payload* message)
 {
     message_bus* message_bus_ptr = (struct message_bus*)ptr;
@@ -411,7 +493,7 @@ bool handle_protocol(void* ptr, payload* message)
         {
             str_list_add_to_tail(message_bus_ptr->peer_node_list, str);
 
-            char* str = str_list_get_next(temp_list);
+            str = str_list_get_next(temp_list);
         }
 
         if (temp_list)
@@ -494,9 +576,11 @@ bool read_current_process_name(void* ptr)
 
     TCHAR szProcessName[MAX_PATH] = { 0 };
 
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION |
-        PROCESS_VM_READ,
-        FALSE, ownpid);
+    HANDLE hProcess = NULL;
+
+    hProcess = OpenProcess(PROCESS_QUERY_INFORMATION |
+    PROCESS_VM_READ,
+    FALSE, ownpid);
 
     // Get the process name.
 
@@ -519,7 +603,12 @@ bool read_current_process_name(void* ptr)
 
     // Release the handle to the process.
 
-    CloseHandle(hProcess);
+    if (hProcess)
+    {
+        CloseHandle(hProcess);
+    }
+
+    return 0;
 }
 
 #else

@@ -26,6 +26,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #define INVALID_SOCKET (-1)
+#define SOCKET int
 #endif
 
 #define SOCKET_ERROR	 (-1)
@@ -36,13 +37,19 @@
 #define ERESTART 99
 #endif
 
-static void on_signal_received(SignalType type);
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+static DWORD WINAPI responder_run(void*  responder_thread_params);
+#else
 static void *responder_run(void* responder_thread_params);
+#endif
+
+static void on_signal_received(SignalType type);
 static bool payload_handle_protocol(payload* message, void* vptr_responder);
 static bool payload_receive(payload* message, void* vptr_responder);
 static bool payload_send(payload* message, void* vptr_responder);
+static void print_nodes();
 
-static int listener_socket = INVALID_SOCKET;
+static SOCKET listener_socket = INVALID_SOCKET;
 static int listener_port = -1;
 static size_t logger_id = 0;
 
@@ -141,7 +148,7 @@ bool broker_run()
         memset((void*)&remotehostaddr, 0, sizeof(remotehostaddr));
         addrlen = sizeof(remotehostaddr);
 
-        int client_sock = accept(listener_socket,&remotehostaddr,&addrlen);
+        SOCKET client_sock = accept(listener_socket,&remotehostaddr,&addrlen);
         if(client_sock != INVALID_SOCKET)
         {
             struct responder_thread_params* params = (responder_thread_params*)calloc(1, sizeof (struct responder_thread_params));
@@ -153,7 +160,7 @@ bool broker_run()
                 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
 
                     int thread_id = 0;
-                    params->thread = CreateThread(NULL, NULL, &responder_run, (LPVOID)params, CREATE_SUSPENDED, &thread_id);
+                    params->thread = CreateThread(NULL, 0, &responder_run, (LPVOID)params, CREATE_SUSPENDED, &thread_id);
                     if (params->thread == NULL)
                     {
                         return false;
@@ -214,35 +221,93 @@ void broker_stop()
     #endif
 }
 
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+
+DWORD WINAPI responder_run(void*  responder_thread_params)
+{
+    struct responder_thread_params* params = (struct responder_thread_params*)responder_thread_params;
+
+    if (params == NULL)
+    {
+        ExitThread(0);
+        return 0;
+    }
+
+    if (params->responder == NULL)
+    {
+        ExitThread(0);
+        free(responder_thread_params);
+        return 0;
+    }
+
+    SOCKET current_socket = responder_get_socket(params->responder);
+    bool ret = true;
+
+    while (true)
+    {
+        payload client_payload = { 0 };
+
+        if (payload_receive(&client_payload, params->responder))
+        {
+            bool ret = payload_handle_protocol(&client_payload, params->responder);
+
+            if (client_payload.data_size > 0 && client_payload.data != NULL)
+            {
+                free(client_payload.data);
+            }
+
+            if (!ret)
+            {
+                break;
+            }
+        }
+        else
+        {
+            #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                        pthread_mutex_lock(&socket_lock);
+            #else
+                        EnterCriticalSection(&socket_lock);
+            #endif
+                        responder_close_socket(params->responder);
+                        client_node_array[current_socket] = NULL;
+            
+            #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+                        pthread_mutex_unlock(&socket_lock);
+            #else
+                        LeaveCriticalSection(&socket_lock);
+            #endif
+
+            print_nodes();
+
+            break;
+        }
+    }
+
+    free(params);
+
+    ExitThread(0);
+    return 0;
+}
+
+#else
+
 void* responder_run(void* responder_thread_params)
 {
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
     pthread_detach(pthread_self());
-    #endif
 
     struct responder_thread_params* params = (struct responder_thread_params*)responder_thread_params;
 
     if(params == NULL)
     {
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-            pthread_exit(NULL);
-        #else
-            ExitThread(0);
-        #endif
-
+        pthread_exit(NULL);
         return NULL;
     }
 
     if(params->responder == NULL)
     {
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-            pthread_cancel(params->thread);
-            pthread_exit(NULL);                
-        #else
-            ExitThread(0);
-        #endif
+        pthread_cancel(params->thread);
         free(responder_thread_params);
-
+        pthread_exit(NULL);                
         return NULL;
     }
 
@@ -270,18 +335,12 @@ void* responder_run(void* responder_thread_params)
         }
     }
 
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_cancel(params->thread);
-    #endif
-
+    pthread_cancel(params->thread);
     free(params);
-
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_exit(NULL);
-    #else
-       ExitThread(0);
-    #endif
+    pthread_exit(NULL);
 }
+
+#endif
 
 bool payload_handle_protocol(payload* message, void* vptr_responder)
 {
@@ -350,18 +409,18 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
             strcpy(node_online_message.sender, "MessageBus");
             node_online_message.data_size = strlen(message->sender);
             node_online_message.data = calloc(1, node_online_message.data_size + (size_t)1);
-            strcpy((char*)node_online_message.data, message->sender);
+            strcpy(node_online_message.data, message->sender);
 
             if (node_list_message.data == NULL)
             {
                 size_t len = strlen(ptr->node_name);
                 node_list_message.data = calloc(1, len + 2);
                 strcpy(node_list_message.data, ptr->node_name);
-                ((char*)node_list_message.data)[len] = ',';
+                node_list_message.data[len] = ',';
             }
             else
             {
-                size_t len = strlen(ptr->node_name) + strlen((char*)node_list_message.data);
+                size_t len = strlen(ptr->node_name) + strlen(node_list_message.data);
 
                 char* temp_buffer = calloc(1, len + 2);
                 strcpy(temp_buffer, (char*)node_list_message.data);
@@ -378,8 +437,8 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
 
         if(node_list_message.data)
         {
-            ((char*)node_list_message.data)[strlen((char*)node_list_message.data) - 1] = 0;
-            node_list_message.data_size = strlen((char*)node_list_message.data);
+            node_list_message.data[strlen(node_list_message.data) - 1] = 0;
+            node_list_message.data_size = strlen(node_list_message.data);
 
             // Now send Node List event to the newly added node
             payload_send(&node_list_message, responder_ptr);
@@ -392,6 +451,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
                 LeaveCriticalSection(&socket_lock);
         #endif
 
+        print_nodes();
         return true;
     }
 
@@ -432,7 +492,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
                 strcpy(node_offline_message.sender, "MessageBus");
                 node_offline_message.data_size = strlen(message->sender);
                 node_offline_message.data = calloc(1, node_offline_message.data_size + 1);
-                strcpy((char*)node_offline_message.data, message->sender);
+                strcpy(node_offline_message.data, message->sender);
 
                 payload_send(&node_offline_message, ptr->responder);
                 free(node_offline_message.data);
@@ -448,7 +508,8 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
         #else
                 LeaveCriticalSection(&socket_lock);
         #endif
-
+                
+        print_nodes();
         return false;
     }
 
@@ -490,6 +551,8 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
 
         return true;
     }
+
+    return true;
 }
 
 bool payload_receive(payload* message, void* vptr_responder)
@@ -511,7 +574,7 @@ bool payload_receive(payload* message, void* vptr_responder)
         return false;
     }
 
-    if(!responder_receive_buffer(responder_ptr, (char*)&message, sizeof (struct payload) - sizeof(void*), false))
+    if(!responder_receive_buffer(responder_ptr, (char*)&message, sizeof (struct payload) - sizeof(char*), false))
     {
         return false;
     }
@@ -546,14 +609,14 @@ bool payload_send(payload* message, void* vptr_responder)
         return false;
     }
 
-    if(!responder_send_buffer(responder_ptr, (const char*)message, sizeof (struct payload) - sizeof (void*)))
+    if(!responder_send_buffer(responder_ptr, (const char*)message, sizeof (struct payload) - sizeof (char*)))
     {
         return false;
     }
 
     if(message->data_size > 0 && message->data != NULL)
     {
-        if(!responder_send_buffer(responder_ptr, (const char*)message->data, message->data_size))
+        if(!responder_send_buffer(responder_ptr, message->data, message->data_size))
         {
             return false;
         }
@@ -612,4 +675,19 @@ void on_signal_received(SignalType stype)
             break;
         }
     }
+}
+
+void print_nodes()
+{
+    printf("\n\nPRINT NODES ++\n");
+    for (size_t index = 0; index < MAX_RESPONDERS; index++)
+    {
+        client_node* ptr = client_node_array[index];
+
+        if (ptr != NULL)
+        {
+            printf("%s\n", ptr->node_name);
+        }
+    }
+    printf("PRINT NODES --\n\n");
 }
