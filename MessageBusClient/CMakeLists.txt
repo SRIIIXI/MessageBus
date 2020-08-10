@@ -34,6 +34,7 @@ ${HEADERS}
 ../CoreLib/include/Responder.h
 ../MessageBus/include/Payload.h
 ./include/MessageBusClient.h
+./include/MessageBusClient.hpp
 )
 
 add_library(${Project} SHARED ${SOURCE} ${HEADERS})

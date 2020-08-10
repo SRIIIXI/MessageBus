@@ -9,7 +9,7 @@
 #include <unistd.h>
 #endif
 
-void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id);
+void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long payload_id);
 
 int main(int argc, char* argv[])
 {
