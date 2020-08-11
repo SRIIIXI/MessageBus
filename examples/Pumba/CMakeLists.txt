@@ -38,6 +38,7 @@ ${HEADERS}
 ../../CoreLib/include/Responder.h
 ../../MessageBus/include/Payload.h
 ../../MessageBusClient/include/MessageBusClient.h
+../../MessageBusClient/include/MessageBusClient.hpp
 )
 
 add_executable(${Project}  ${SOURCE} ${HEADERS})

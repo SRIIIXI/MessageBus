@@ -37,18 +37,6 @@
 #define ERESTART 99
 #endif
 
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-static DWORD WINAPI responder_run(void*  responder_thread_params);
-#else
-static void *responder_run(void* responder_thread_params);
-#endif
-
-static void on_signal_received(SignalType type);
-static bool payload_handle_protocol(payload* message, void* vptr_responder);
-static bool payload_receive(payload* message, void* vptr_responder);
-static bool payload_send(payload* message, void* vptr_responder);
-static void print_nodes();
-
 static SOCKET listener_socket = INVALID_SOCKET;
 static int listener_port = -1;
 static size_t logger_id = 0;
@@ -82,6 +70,21 @@ typedef struct client_node
 }client_node;
 
 static void* client_node_array[MAX_RESPONDERS];
+
+#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
+static DWORD WINAPI responder_run(void* responder_thread_params);
+#else
+static void* responder_run(void* responder_thread_params);
+#endif
+
+static void on_signal_received(SignalType type);
+static bool payload_handle_protocol(payload* message, void* vptr_responder);
+static bool payload_receive(payload* message, void* vptr_responder);
+static bool payload_send(payload* message, void* vptr_responder);
+static bool payload_broadcast_registration(const char* node_name);
+static bool payload_broadcast_deregistration(const char* node_name);
+static bool payload_send_nodelist(client_node* node);
+static void print_nodes();
 
 bool broker_initialize(char* appname, int port)
 {
@@ -276,37 +279,8 @@ DWORD WINAPI responder_run(void*  responder_thread_params)
             responder_close_socket(params->responder);
             client_node_array[current_socket] = NULL;
 
-            for (size_t index = 0; index < MAX_RESPONDERS; index++)
-            {
-                if (client_node_array[index] == NULL)
-                {
-                    continue;
-                }
+            payload_broadcast_deregistration(node_name);
 
-                client_node* ptr = client_node_array[index];
-
-                if (strcmp(ptr->node_name, node_name) == 0)
-                {
-                    continue;
-                }
-
-                struct payload node_offline_message;
-                node_offline_message.payload_type = PAYLOAD_TYPE_EVENT;
-                node_offline_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_OFFLINE;
-                node_offline_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
-                node_offline_message.payload_id = 0;
-                strcpy(node_offline_message.receipient, ptr->node_name);
-                strcpy(node_offline_message.sender, "MessageBus");
-                node_offline_message.data_size = strlen(node_name);
-                node_offline_message.data = calloc(1, node_offline_message.data_size + (size_t)1);
-                if (node_offline_message.data)
-                {
-                    strcpy(node_offline_message.data, node_name);
-                    payload_send(&node_offline_message, ptr->responder);
-                    free(node_offline_message.data);
-                }
-            }
-            
             #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
                         pthread_mutex_unlock(&socket_lock);
             #else
@@ -380,36 +354,7 @@ void* responder_run(void* responder_thread_params)
             responder_close_socket(params->responder);
             client_node_array[current_socket] = NULL;
 
-            for (size_t index = 0; index < MAX_RESPONDERS; index++)
-            {
-                if (client_node_array[index] == NULL)
-                {
-                    continue;
-                }
-
-                client_node* ptr = client_node_array[index];
-
-                if (strcmp(ptr->node_name, node_name) == 0)
-                {
-                    continue;
-                }
-
-                struct payload node_offline_message;
-                node_offline_message.payload_type = PAYLOAD_TYPE_EVENT;
-                node_offline_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_OFFLINE;
-                node_offline_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
-                node_offline_message.payload_id = 0;
-                strcpy(node_offline_message.receipient, ptr->node_name);
-                strcpy(node_offline_message.sender, "MessageBus");
-                node_offline_message.data_size = strlen(node_name);
-                node_offline_message.data = calloc(1, node_offline_message.data_size + (size_t)1);
-                if (node_offline_message.data)
-                {
-                    strcpy(node_offline_message.data, node_name);
-                    payload_send(&node_offline_message, ptr->responder);
-                    free(node_offline_message.data);
-                }
-            }
+            payload_broadcast_deregistration(node_name);
 
             #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
                         pthread_mutex_unlock(&socket_lock);
@@ -462,89 +407,13 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
                 strcpy(new_node->node_name, message->sender);
                 new_node->responder = responder_ptr;
                 client_node_array[sender_socket] = new_node;
+
+                // Send Node Online event to all other nodes
+                payload_broadcast_registration(message->sender);
+
+                // Send node list payload for the new node
+                payload_send_nodelist(new_node);
             }
-        }
-
-        // Send Node Online event to all other nodes
-
-        // While we iterate, we will also build up a node list payload for the new node
-        struct payload node_list_message = {0};
-        node_list_message.payload_type = PAYLOAD_TYPE_EVENT;
-        node_list_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODELIST;
-        node_list_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
-        node_list_message.payload_id = 0;
-        strcpy(node_list_message.receipient, message->sender);
-        strcpy(node_list_message.sender, "MessageBus");
-
-        for(size_t index = 0; index < MAX_RESPONDERS; index++)
-        {
-            if(client_node_array[index] == NULL)
-            {
-                continue;
-            }
-
-            client_node* ptr = client_node_array[index];
-
-            if(strcmp(ptr->node_name, message->sender) == 0)
-            {
-                continue;
-            }
-
-            struct payload node_online_message = {0};
-            node_online_message.payload_type = PAYLOAD_TYPE_EVENT;
-            node_online_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_ONLINE;
-            node_online_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
-            node_online_message.payload_id = 0;
-            strcpy(node_online_message.receipient, ptr->node_name);
-            strcpy(node_online_message.sender, "MessageBus");
-            node_online_message.data_size = strlen(message->sender);
-
-            node_online_message.data = calloc(1, node_online_message.data_size + (size_t)1);
-            if (node_online_message.data)
-            {
-                strcpy(node_online_message.data, message->sender);
-                payload_send(&node_online_message, ptr->responder);
-                free(node_online_message.data);            
-            }
-
-            if (node_list_message.data == NULL)
-            {
-                size_t len = strlen(ptr->node_name);
-                node_list_message.data = calloc(1, len + 2);
-
-                if (node_list_message.data)
-                {
-                    strcpy(node_list_message.data, ptr->node_name);
-                    node_list_message.data[len] = ',';
-                }
-            }
-            else
-            {
-                size_t len = strlen(ptr->node_name) + strlen(node_list_message.data);
-
-                char* temp_buffer = calloc(1, len + (size_t)2);
-                if (temp_buffer)
-                {
-                    strcpy(temp_buffer, (char*)node_list_message.data);
-                    strcat(temp_buffer, ptr->node_name);
-                    temp_buffer[len] = ',';
-
-                    free(node_list_message.data);
-                    node_list_message.data = temp_buffer;
-                }
-            }
-        }
-
-        //Out of loop
-
-        if(node_list_message.data)
-        {
-            node_list_message.data[strlen(node_list_message.data) - 1] = 0;
-            node_list_message.data_size = strlen(node_list_message.data);
-
-            // Now send Node List event to the newly added node
-            payload_send(&node_list_message, responder_ptr);
-            free(node_list_message.data);
         }
 
         #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
@@ -571,38 +440,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
         // If we have the node in our array
         if(old_node != NULL)
         {
-            // Send Node Offline event to all other nodes
-            for(size_t index = 0; index < MAX_RESPONDERS; index++)
-            {
-                if(client_node_array[index] == NULL)
-                {
-                    continue;
-                }
-
-                client_node* ptr = client_node_array[index];
-
-                if(strcmp(ptr->node_name, message->sender) == 0)
-                {
-                    continue;
-                }
-
-                struct payload node_offline_message;
-                node_offline_message.payload_type = PAYLOAD_TYPE_EVENT;
-                node_offline_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_OFFLINE;
-                node_offline_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
-                node_offline_message.payload_id = 0;
-                strcpy(node_offline_message.receipient, ptr->node_name);
-                strcpy(node_offline_message.sender, "MessageBus");
-                node_offline_message.data_size = strlen(message->sender);
-                node_offline_message.data = calloc(1, node_offline_message.data_size + (size_t)1);
-
-                if (node_offline_message.data)
-                {
-                    strcpy(node_offline_message.data, message->sender);
-                    payload_send(&node_offline_message, ptr->responder);
-                    free(node_offline_message.data);
-                }
-            }
+            payload_broadcast_deregistration(old_node->node_name);
 
             // Now remove the old node from the array
             responder_close_socket(old_node->responder);
@@ -659,6 +497,151 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
     }
 
     return true;
+}
+
+bool payload_broadcast_registration(const char* node_name)
+{
+    for (size_t index = 0; index < MAX_RESPONDERS; index++)
+    {
+        if (client_node_array[index] == NULL)
+        {
+            continue;
+        }
+
+        client_node* ptr = client_node_array[index];
+
+        if (strcmp(ptr->node_name, node_name) == 0)
+        {
+            continue;
+        }
+
+        struct payload node_online_message = { 0 };
+        node_online_message.payload_type = PAYLOAD_TYPE_EVENT;
+        node_online_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_ONLINE;
+        node_online_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
+        node_online_message.payload_id = 0;
+        strcpy(node_online_message.receipient, ptr->node_name);
+        strcpy(node_online_message.sender, "MessageBus");
+        node_online_message.data_size = strlen(node_name);
+
+        node_online_message.data = calloc(1, node_online_message.data_size + (size_t)1);
+        if (node_online_message.data)
+        {
+            strcpy(node_online_message.data, node_name);
+            payload_send(&node_online_message, ptr->responder);
+            free(node_online_message.data);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool payload_broadcast_deregistration(const char* node_name)
+{
+    // Send Node Offline event to all other nodes
+    for (size_t index = 0; index < MAX_RESPONDERS; index++)
+    {
+        if (client_node_array[index] == NULL)
+        {
+            continue;
+        }
+
+        client_node* ptr = client_node_array[index];
+
+        if (strcmp(ptr->node_name, node_name) == 0)
+        {
+            continue;
+        }
+
+        struct payload node_offline_message;
+        node_offline_message.payload_type = PAYLOAD_TYPE_EVENT;
+        node_offline_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_OFFLINE;
+        node_offline_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
+        node_offline_message.payload_id = 0;
+        strcpy(node_offline_message.receipient, ptr->node_name);
+        strcpy(node_offline_message.sender, "MessageBus");
+        node_offline_message.data_size = strlen(node_name);
+        node_offline_message.data = calloc(1, node_offline_message.data_size + (size_t)1);
+
+        if (node_offline_message.data)
+        {
+            strcpy(node_offline_message.data, node_name);
+            payload_send(&node_offline_message, ptr->responder);
+            free(node_offline_message.data);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool payload_send_nodelist(client_node* node)
+{
+    struct payload node_list_message = { 0 };
+    node_list_message.payload_type = PAYLOAD_TYPE_EVENT;
+    node_list_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODELIST;
+    node_list_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
+    node_list_message.payload_id = 0;
+    strcpy(node_list_message.receipient, node->node_name);
+    strcpy(node_list_message.sender, "MessageBus");
+
+    for (size_t index = 0; index < MAX_RESPONDERS; index++)
+    {
+        if (client_node_array[index] == NULL)
+        {
+            continue;
+        }
+
+        client_node* ptr = client_node_array[index];
+
+        if (strcmp(ptr->node_name, node->node_name) == 0)
+        {
+            continue;
+        }
+
+        if (node_list_message.data == NULL)
+        {
+            size_t len = strlen(ptr->node_name);
+            node_list_message.data = calloc(1, len + 2);
+
+            if (node_list_message.data)
+            {
+                strcpy(node_list_message.data, ptr->node_name);
+                node_list_message.data[len] = ',';
+            }
+        }
+        else
+        {
+            size_t len = strlen(ptr->node_name) + strlen(node_list_message.data);
+
+            char* temp_buffer = calloc(1, len + (size_t)2);
+            if (temp_buffer)
+            {
+                strcpy(temp_buffer, (char*)node_list_message.data);
+                strcat(temp_buffer, ptr->node_name);
+                temp_buffer[len] = ',';
+
+                free(node_list_message.data);
+                node_list_message.data = temp_buffer;
+            }
+        }
+    }
+
+    //Out of loop
+
+    if (node_list_message.data)
+    {
+        node_list_message.data[strlen(node_list_message.data) - 1] = 0;
+        node_list_message.data_size = strlen(node_list_message.data);
+
+        // Now send Node List event to the newly added node
+        payload_send(&node_list_message, node->responder);
+        free(node_list_message.data);
+        return true;
+    }
+    
+    return false;
 }
 
 bool payload_receive(payload* message, void* vptr_responder)
