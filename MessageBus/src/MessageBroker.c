@@ -321,13 +321,16 @@ void* responder_run(void* responder_thread_params)
         return NULL;
     }
 
+    SOCKET current_socket = responder_get_socket(params->responder);
+    bool ret = true;
+
     while(true)
     {
         payload client_payload = {0};
 
         if(payload_receive(&client_payload, params->responder))
         {
-            bool ret = payload_handle_protocol(&client_payload, params->responder);
+            ret = payload_handle_protocol(&client_payload, params->responder);
 
             if (client_payload.data_size > 0 && client_payload.data != NULL)
             {
