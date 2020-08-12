@@ -54,10 +54,14 @@ int main(int argc, char* argv[])
 
     while(snooze_time < 60000)
     {
-        //if(message_bus_has_node(message_bus, "Pumba"))
-        //{
-        //    message_bus_send(message_bus, "Pumba", Data, UserData, Text, str, strlen(str), &payload_id);
-        //}
+        long node_index = -1;
+        node_index = message_bus_has_node(message_bus, "Pumba");
+        if (node_index > -1)
+        {
+            long payload_id = 0;
+            char* node_full_name = message_bus_node_fullname(message_bus, node_index);
+            message_bus_send(message_bus, node_full_name, Data, UserData, Text, str, strlen(str), &payload_id);
+        }
 
         #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
                 sleep(5);

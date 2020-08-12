@@ -294,13 +294,13 @@ bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, Messa
     return true;
 }
 
-bool message_bus_has_node(void* ptr, const char* node_name)
+long message_bus_has_node(void* ptr, const char* node_name)
 {
     message_bus* message_bus_ptr = (struct message_bus*)ptr;
 
     if(message_bus_ptr == NULL)
     {
-        return false;
+        return -1;
     }
 
     #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
@@ -317,13 +317,44 @@ bool message_bus_has_node(void* ptr, const char* node_name)
         LeaveCriticalSection(&socket_lock);
     #endif
 
-    if(index > -1)
+    return index;
+}
+
+char* message_bus_node_fullname(void* ptr, long node_index)
+{
+    message_bus* message_bus_ptr = (struct message_bus*)ptr;
+
+    char* str = NULL;
+
+    if (message_bus_ptr == NULL || node_index < 0)
     {
-        return true;
+        return NULL;
     }
 
-    return false;
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_mutex_lock(&socket_lock);
+    #else
+        EnterCriticalSection(&socket_lock);
+    #endif
+
+    if ((str_list_item_count(message_bus_ptr->peer_node_list)-1) < node_index)
+    {
+        str = NULL;
+    }
+    else
+    {
+        str = str_list_get_at(message_bus_ptr->peer_node_list, node_index);
+    }
+
+    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
+        pthread_mutex_unlock(&socket_lock);
+    #else
+        LeaveCriticalSection(&socket_lock);
+    #endif
+
+    return str;
 }
+
 
 #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
 
@@ -542,9 +573,9 @@ bool handle_protocol(void* ptr, payload* message)
                 EnterCriticalSection(&socket_lock);
         #endif
 
-        long long index = str_list_index_of(message_bus_ptr->peer_node_list, message->data);
+        long long index = str_list_index_of_like(message_bus_ptr->peer_node_list, message->data);
 
-        if(index > 1)
+        if(index > -1)
         {
             str_list_remove_at(message_bus_ptr->peer_node_list, index);
         }

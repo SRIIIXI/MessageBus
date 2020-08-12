@@ -353,14 +353,16 @@ void str_list_remove_at(void* lptr, size_t pos)
         return;
     }
 
-    if(pos == ((StringList*)lptr)->Count -1)
-    {
-        str_list_remove_from_tail(lptr);
-    }
-
     if(pos == 0)
     {
         str_list_remove_from_head(lptr);
+        return;
+    }    
+    
+    if(pos == ((StringList*)lptr)->Count -1)
+    {
+        str_list_remove_from_tail(lptr);
+        return;
     }
 
     size_t idx = 1;
