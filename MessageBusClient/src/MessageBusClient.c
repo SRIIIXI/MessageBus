@@ -309,6 +309,16 @@ long message_bus_has_node(void* ptr, const char* node_name)
         EnterCriticalSection(&socket_lock);
     #endif
 
+    if (message_bus_ptr == NULL)
+    {
+        return -1;
+    }
+
+    if (message_bus_ptr->peer_node_list == NULL)
+    {
+        return -1;
+    }
+
     long index = str_list_index_of_like(message_bus_ptr->peer_node_list, node_name);
 
     #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
