@@ -57,7 +57,11 @@ dkms.conf
 
 #Directories
 temp/
-release/
-debug/
+*release/
+*debug/
 .vs/
 out/
+build/
+log/
+*Debug/
+*Release/

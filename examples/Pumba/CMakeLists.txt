@@ -6,19 +6,7 @@ project(${Project})
 
 include_directories(./include/ ../../CoreLib/include/ ../../MessageBus/include/ ../../MessageBusClient/include/ /include/ /usr/include/ /usr/local/include/)
 
-if(WIN32)
-link_libraries(ws2_32)
-if (MSVC)
-    # Build cpp files on all cores
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /W4")
-
-    # can't use the "secure" versions as they're Windows specific
-    add_definitions("/D\"_CRT_SECURE_NO_WARNINGS\"")
-    add_definitions("/D\"_SCL_SECURE_NO_WARNINGS\"")
-endif()
-else()
 link_libraries(rt pthread dl)
-endif()
 
 set(SOURCE
 ${SOURCE}
@@ -27,7 +15,9 @@ ${SOURCE}
 ../../CoreLib/src/StringList.c
 ../../CoreLib/src/Responder.c
 ../../MessageBusClient/src/MessageBusClient.c
+#../../MessageBusClient/src/MessageBusClient.cpp
 ./src/main.c
+#./src/main.cpp
 )
 
 set(HEADERS
@@ -38,7 +28,7 @@ ${HEADERS}
 ../../CoreLib/include/Responder.h
 ../../MessageBus/include/Payload.h
 ../../MessageBusClient/include/MessageBusClient.h
-../../MessageBusClient/include/MessageBusClient.hpp
+#../../MessageBusClient/include/MessageBusClient.hpp
 )
 
 add_executable(${Project}  ${SOURCE} ${HEADERS})

@@ -2,33 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-#include <windows.h>
-#else
 #include <unistd.h>
-#endif
 
 void network_event(const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long payload_id);
 
 int main(int argc, char* argv[])
 {
     void* message_bus = NULL;
-
-    #if defined(_WIN32) || defined(WIN32)
-        WSACleanup();
-        WSADATA WSData;
-        long nRc = WSAStartup(0x0202, &WSData);
-        if (nRc != 0)
-        {
-            return false;
-        }
-        if (WSData.wVersion != 0x0202)
-        {
-            WSACleanup();
-            return false;
-        }
-    #endif
 
     if(!message_bus_initialize(&message_bus, network_event))
     {
@@ -44,6 +24,7 @@ int main(int argc, char* argv[])
     {
         return -1;
     }
+    printf("I am Pumba. I am heavy and fat. I use a C++ based IPC\n");
 
     char str[] = "Hello Timon! I'm Pumba";
     long payload_id = 0;
@@ -62,21 +43,12 @@ int main(int argc, char* argv[])
             message_bus_send(message_bus, node_full_name, Data, UserData, Text, str, strlen(str), &payload_id);
         }
 
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
         sleep(5);
-        #else
-        Sleep(500);
-        #endif
-
         snooze_time += 5;
     }
 
     message_bus_deregister(message_bus);
     message_bus_close(message_bus);
-
-    #if defined(_WIN32) || defined(WIN32)
-        WSACleanup();
-    #endif
 
     return 0;
 }
