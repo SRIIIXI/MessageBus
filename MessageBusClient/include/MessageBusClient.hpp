@@ -16,8 +16,13 @@ public:
 	virtual void OnResponse(const std::string& nodename, const DataType& dtype, const long& payloadid, const std::vector<char>& messagebuffer) = 0;
 };
 
+static IMessageCallback* callback = nullptr;
+
 class MessageBusClient
 {
+private:
+    void* message_bus;
+
 public:
 	MessageBusClient()
 	{
@@ -32,6 +37,7 @@ public:
 	bool Initialize(IMessageCallback *callbackref)
 	{
 		callback = callbackref;
+        return true;
 	}
 
 	bool Open()
@@ -56,7 +62,7 @@ public:
 
 	bool Send(const std::string &node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long &payload_id)
 	{
-		return message_bus_send(message_bus, node_name.c_str(), ptype, mtype.dtype, messagebuffer, buffersize, *payload_id);
+        return message_bus_send(message_bus, node_name.c_str(), ptype, mtype, dtype, messagebuffer, buffersize, &payload_id);
 	}
 
 	bool HasNode(const std::string &node_name)
@@ -84,7 +90,7 @@ public:
 						break;
 					}
 
-					std::vector<char> buffer = messagebuffer;
+                    std::vector<char> buffer = messagebuffer;
 
 					callback->OnEvent(std::string(node_name), dtype, buffer);
 
@@ -119,8 +125,4 @@ public:
 			}
 		}
 	}
-
-private:
-	void* message_bus;
-	IMessageCallback* callback;
 };

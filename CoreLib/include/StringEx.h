@@ -34,15 +34,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stddef.h>
 #include <wchar.h>
 
-#if defined(_WIN32) || defined (WIN32) || defined (_WIN64)
-#define LIBRARY_EXPORT __declspec(dllexport)
-#define LIBRARY_ENTRY
-#define LIBRARY_EXIT 
-#else
 #define LIBRARY_EXPORT __attribute__((visibility("default")))
 #define LIBRARY_ENTRY __attribute__((constructor))
 #define LIBRARY_EXIT __attribute__((destructor))
-#endif 
 
 extern LIBRARY_EXPORT wchar_t* strtowstr(const char* str);
 extern LIBRARY_EXPORT char* strfromwstr(const wchar_t* wstr);

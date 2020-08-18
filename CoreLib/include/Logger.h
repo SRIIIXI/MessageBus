@@ -33,21 +33,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdint.h>
 #include <stdbool.h>
 
-#if defined(_WIN32) || defined (WIN32) || defined (_WIN64)
-#define LIBRARY_EXPORT __declspec(dllexport)
-#define LIBRARY_ENTRY
-#define LIBRARY_EXIT 
-#else
 #define LIBRARY_EXPORT __attribute__((visibility("default")))
 #define LIBRARY_ENTRY __attribute__((constructor))
 #define LIBRARY_EXIT __attribute__((destructor))
-#endif 
-
-#if defined(_WIN32) || defined (WIN32) || defined (_WIN64)
-#define __FUNCTIONNAME__ __FUNCTION__
-#else
 #define __FUNCTIONNAME__ __PRETTY_FUNCTION__
-#endif
 
 typedef enum LogLevel
 {
@@ -59,11 +48,11 @@ typedef enum LogLevel
 }LogLevel;
 
 extern LIBRARY_EXPORT size_t  logger_allocate_default();
-extern LIBRARY_EXPORT size_t  logger_allocate(size_t flszmb, const char* mname, const char* dirpath);
+extern LIBRARY_EXPORT size_t  logger_allocate(size_t flszmb, const char* dirpath);
 extern LIBRARY_EXPORT void    logger_release(size_t loggerid);
-extern LIBRARY_EXPORT void    logger_start_logging(size_t loggerid);
+extern LIBRARY_EXPORT bool    logger_start_logging(size_t loggerid);
 extern LIBRARY_EXPORT void    logger_stop_logging(size_t loggerid);
-extern LIBRARY_EXPORT void    logger_write(size_t loggerid, const char* logentry, LogLevel llevel, const char* func, const char* file, int line);
+extern LIBRARY_EXPORT bool    logger_write(size_t loggerid, const char* logentry, LogLevel llevel, const char* func, const char* file, int line);
 extern LIBRARY_EXPORT size_t  logger_get_instance();
 
 #define WriteLog(id, str, level) \

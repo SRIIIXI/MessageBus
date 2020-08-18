@@ -11,19 +11,7 @@ set(MessageBus_VERSION_MINOR 0)
 include_directories(./include/ ../CoreLib/include /include/ /usr/include/ /usr/local/include/)
 link_directories(./lib/ /lib /usr/lib/ /usr/local/lib/ /usr/lib/${CMAKE_SYSTEM_PROCESSOR}/)
 
-if(WIN32)
-link_libraries(ws2_32)
-if (MSVC)
-    # Build cpp files on all cores
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP /W4")
-
-    # can't use the "secure" versions as they're Windows specific
-    add_definitions("/D\"_CRT_SECURE_NO_WARNINGS\"")
-    add_definitions("/D\"_SCL_SECURE_NO_WARNINGS\"")
-endif()
-else()
 link_libraries(rt pthread dl)
-endif()
 
 set(SOURCE
 ${SOURCE}

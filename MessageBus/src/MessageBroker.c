@@ -14,10 +14,6 @@
 #include <memory.h>
 #include <stdlib.h>
 
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-#include <WinSock2.h>
-#include <Windows.h>
-#else
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -27,7 +23,6 @@
 #include <netinet/in.h>
 #define INVALID_SOCKET (-1)
 #define SOCKET int
-#endif
 
 #define SOCKET_ERROR	 (-1)
 #define LPSOCKADDR sockaddr*
@@ -40,26 +35,13 @@
 static SOCKET listener_socket = INVALID_SOCKET;
 static int listener_port = -1;
 static size_t logger_id = 0;
-
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-static int addrlen;
-#else
 static socklen_t addrlen;
-#endif
-
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-static CRITICAL_SECTION socket_lock;
-#else
 static pthread_mutex_t socket_lock;
-#endif
+
 
 typedef struct responder_thread_params
 {
-    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-        HANDLE thread;
-    #else
-        pthread_t thread;
-    #endif
+    pthread_t thread;
     void* responder;
 }responder_thread_params;
 
@@ -71,12 +53,7 @@ typedef struct client_node
 
 static void* client_node_array[MAX_RESPONDERS];
 
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-static DWORD WINAPI responder_run(void* responder_thread_params);
-#else
 static void* responder_run(void* responder_thread_params);
-#endif
-
 static void on_signal_received(SignalType type);
 static bool payload_handle_protocol(payload* message, void* vptr_responder);
 static bool payload_receive(payload* message, void* vptr_responder);
@@ -84,41 +61,27 @@ static bool payload_send(payload* message, void* vptr_responder);
 static bool payload_broadcast_registration(const char* node_name);
 static bool payload_broadcast_deregistration(const char* node_name);
 static bool payload_send_nodelist(client_node* node);
-static void print_nodes();
 
 bool broker_initialize(char* appname, int port)
 {
     listener_port = port;
 
-    logger_id = logger_allocate(10, appname, NULL);
-    logger_start_logging(logger_id);
+    logger_id = logger_allocate(10, NULL);
+
+    if(logger_id == SIZE_MAX)
+    {
+        return false;
+    }
+
+    if(!logger_start_logging(logger_id))
+    {
+        return false;        
+    }
 
     signals_register_callback(on_signal_received);
     signals_initialize_handlers();
 
-    #if defined(_WIN32) || defined(WIN32)
-        WSACleanup();
-        WSADATA WSData;
-        long nRc = WSAStartup(0x0202, &WSData);
-        if (nRc != 0)
-        {
-            return false;
-        }
-        if (WSData.wVersion != 0x0202)
-        {
-            WSACleanup();
-            return false;
-        }
-    #endif
-
-    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-    if (!InitializeCriticalSectionAndSpinCount(&socket_lock, 0x00000400))
-    {
-        return false;
-    }
-    #else
-        pthread_mutex_init(&socket_lock, NULL);
-    #endif
+    pthread_mutex_init(&socket_lock, NULL);
 
     return true;
 }
@@ -140,10 +103,14 @@ bool broker_run()
         return BindFailed;
     }
 
+    WriteLogNormal(logger_id, "Socket bind complete");
+
     if(listen(listener_socket,5) == SOCKET_ERROR)
     {
         return ListenFailed;
     }
+
+    WriteLogNormal(logger_id, "Socket in listening mode");
 
     while(true)
     {
@@ -160,41 +127,23 @@ bool broker_run()
             {
                 params->responder = responder_assign_socket(params->responder, client_sock);
 
-                #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-
-                    int thread_id = 0;
-                    params->thread = CreateThread(NULL, 0, &responder_run, (LPVOID)params, CREATE_SUSPENDED, &thread_id);
-                    if (params->thread == NULL)
-                    {
-                        return false;
-                    }
-                    ResumeThread(params->thread);
-
-                #else
-
-                    pthread_attr_t pthread_attr;
-                    memset(&pthread_attr, 0, sizeof(pthread_attr_t));
-                    // default threading attributes
-                    pthread_attr_init(&pthread_attr);
-                    // allow a thread to exit cleanly without a join
-                    pthread_attr_setdetachstate(&pthread_attr, PTHREAD_CREATE_DETACHED);
-                    if (pthread_create(&params->thread, &pthread_attr, responder_run, params) != 0)
-                    {
-                        responder_close_socket(params->responder);
-                        free(params);
-                        continue;
-                    }
-
-                #endif
+                pthread_attr_t pthread_attr;
+                memset(&pthread_attr, 0, sizeof(pthread_attr_t));
+                // default threading attributes
+                pthread_attr_init(&pthread_attr);
+                // allow a thread to exit cleanly without a join
+                pthread_attr_setdetachstate(&pthread_attr, PTHREAD_CREATE_DETACHED);
+                if (pthread_create(&params->thread, &pthread_attr, responder_run, params) != 0)
+                {
+                    responder_close_socket(params->responder);
+                    free(params);
+                    continue;
+                }
             }
             else
             {
                 shutdown(client_sock, 2);
-                #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-                    closesocket(client_sock);
-                #else
-                    close(client_sock);
-                #endif
+                close(client_sock);
             }
         }
         else
@@ -210,96 +159,9 @@ bool broker_run()
 void broker_stop()
 {
     shutdown(listener_socket, 2);
-
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_mutex_destroy(&socket_lock);
-        close(listener_socket);
-   #else
-        DeleteCriticalSection(&socket_lock);
-        closesocket(listener_socket);
-#endif
-
-    #if defined(_WIN32) || defined(WIN32)
-            WSACleanup();
-    #endif
+    pthread_mutex_destroy(&socket_lock);
+    close(listener_socket);
 }
-
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-
-DWORD WINAPI responder_run(void*  responder_thread_params)
-{
-    struct responder_thread_params* params = (struct responder_thread_params*)responder_thread_params;
-
-    if (params == NULL)
-    {
-        ExitThread(0);
-        return 0;
-    }
-
-    if (params->responder == NULL)
-    {
-        ExitThread(0);
-        free(responder_thread_params);
-        return 0;
-    }
-
-    SOCKET current_socket = responder_get_socket(params->responder);
-    bool ret = true;
-
-    while (true)
-    {
-        payload client_payload = { 0 };
-
-        if (payload_receive(&client_payload, params->responder))
-        {
-            bool ret = payload_handle_protocol(&client_payload, params->responder);
-
-            if (client_payload.data_size > 0 && client_payload.data != NULL)
-            {
-                free(client_payload.data);
-            }
-
-            if (!ret)
-            {
-                break;
-            }
-        }
-        else
-        {
-            #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                        pthread_mutex_lock(&socket_lock);
-            #else
-                        EnterCriticalSection(&socket_lock);
-            #endif
-
-            char node_name[32] = { 0 };
-
-            strcpy(node_name, ((client_node*)client_node_array[current_socket])->node_name);
-
-            responder_close_socket(params->responder);
-            client_node_array[current_socket] = NULL;
-
-            payload_broadcast_deregistration(node_name);
-
-            #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                        pthread_mutex_unlock(&socket_lock);
-            #else
-                        LeaveCriticalSection(&socket_lock);
-            #endif
-
-            print_nodes();
-
-            break;
-        }
-    }
-
-    free(params);
-
-    ExitThread(0);
-    return 0;
-}
-
-#else
 
 void* responder_run(void* responder_thread_params)
 {
@@ -344,12 +206,7 @@ void* responder_run(void* responder_thread_params)
         }
         else
         {
-            #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                        pthread_mutex_lock(&socket_lock);
-            #else
-                        EnterCriticalSection(&socket_lock);
-            #endif
-
+            pthread_mutex_lock(&socket_lock);
             char node_name[32] = { 0 };
 
             strcpy(node_name, ((client_node*)client_node_array[current_socket])->node_name);
@@ -359,13 +216,7 @@ void* responder_run(void* responder_thread_params)
 
             payload_broadcast_deregistration(node_name);
 
-            #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                        pthread_mutex_unlock(&socket_lock);
-            #else
-                        LeaveCriticalSection(&socket_lock);
-            #endif
-
-            print_nodes();
+            pthread_mutex_unlock(&socket_lock);
 
             break;
         }
@@ -375,8 +226,6 @@ void* responder_run(void* responder_thread_params)
     free(params);
     pthread_exit(NULL);
 }
-
-#endif
 
 bool payload_handle_protocol(payload* message, void* vptr_responder)
 {
@@ -392,11 +241,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
     // Event => Registration
     if(message->payload_type == PAYLOAD_TYPE_EVENT && message->payload_sub_type == PAYLOAD_SUB_TYPE_REGISTER)
     {
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_lock(&socket_lock);
-        #else
-                EnterCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_lock(&socket_lock);
 
         // Make sure that the registration request is from a new node
         client_node* new_node = client_node_array[sender_socket];
@@ -419,24 +264,15 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
             }
         }
 
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_unlock(&socket_lock);
-        #else
-                LeaveCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_unlock(&socket_lock);
 
-        print_nodes();
         return true;
     }
 
     // Event => Deregistration
     if(message->payload_type == PAYLOAD_TYPE_EVENT && message->payload_sub_type == PAYLOAD_SUB_TYPE_DEREGISTER)
     {
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_lock(&socket_lock);
-        #else
-                EnterCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_lock(&socket_lock);
 
         client_node* old_node = client_node_array[sender_socket];
 
@@ -450,13 +286,8 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
             client_node_array[sender_socket] = NULL;
         }
 
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_unlock(&socket_lock);
-        #else
-                LeaveCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_unlock(&socket_lock);
                 
-        print_nodes();
         return false;
     }
 
@@ -470,11 +301,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
     // All other payload types that carry trailing data buffers
     if(message->payload_type == PAYLOAD_TYPE_DATA || message->payload_type == PAYLOAD_TYPE_REQUEST || message->payload_type == PAYLOAD_TYPE_RESPONSE || message->payload_type ==  PAYLOAD_TYPE_EVENT)
     {
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_lock(&socket_lock);
-        #else
-                EnterCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_lock(&socket_lock);
 
         for(size_t index = 0; index < MAX_RESPONDERS; index++)
         {
@@ -490,11 +317,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
             }
         }
 
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_unlock(&socket_lock);
-        #else
-                LeaveCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_unlock(&socket_lock);
 
         return true;
     }
@@ -504,6 +327,10 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
 
 bool payload_broadcast_registration(const char* node_name)
 {
+    char buffer[129] = {0};
+    sprintf(buffer, "Node %s REGISTRATION", node_name);
+    WriteLogNormal(logger_id, buffer);
+
     for (size_t index = 0; index < MAX_RESPONDERS; index++)
     {
         if (client_node_array[index] == NULL)
@@ -542,6 +369,10 @@ bool payload_broadcast_registration(const char* node_name)
 
 bool payload_broadcast_deregistration(const char* node_name)
 {
+    char buffer[129] = {0};
+    sprintf(buffer, "Node %s DEREGISTRATION", node_name);
+    WriteLogNormal(logger_id, buffer);
+
     // Send Node Offline event to all other nodes
     for (size_t index = 0; index < MAX_RESPONDERS; index++)
     {
@@ -767,19 +598,7 @@ void on_signal_received(SignalType stype)
             break;
         }
     }
+
+    logger_stop_logging(logger_id);
 }
 
-void print_nodes()
-{
-    printf("\n\nPRINT NODES ++\n");
-    for (size_t index = 0; index < MAX_RESPONDERS; index++)
-    {
-        client_node* ptr = client_node_array[index];
-
-        if (ptr != NULL)
-        {
-            printf("%s\n", ptr->node_name);
-        }
-    }
-    printf("PRINT NODES --\n\n");
-}

@@ -9,10 +9,6 @@
 #include <errno.h>
 #include <string.h>
 
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-#include <WinSock2.h>
-#include <ws2tcpip.h>
-#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
@@ -20,12 +16,6 @@
 #include <unistd.h>
 #define SOCKET int
 #define INVALID_SOCKET (-1)
-#endif
-
-#if defined(_MSC_VER) && defined(_WIN32)
-#include <BaseTsd.h>
-typedef SSIZE_T ssize_t;
-#endif
 
 #define SOCKET_ERROR	 (-1)
 #define LPSOCKADDR sockaddr*
@@ -201,11 +191,7 @@ bool responder_connect_socket(void* ptr)
 	{
         responder_ptr->error_code = errno;
         shutdown(responder_ptr->socket, 2);
-        #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-                closesocket(responder_ptr->socket);
-        #else
-                close(responder_ptr->socket);
-        #endif
+        close(responder_ptr->socket);
         responder_ptr->connected = false;
 		return false;
 	}
@@ -229,12 +215,7 @@ bool responder_close_socket(void* ptr)
     }
 
     shutdown(responder_ptr->socket, 2);
-
-    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-        closesocket(responder_ptr->socket);
-    #else
-        close(responder_ptr->socket);
-    #endif
+    close(responder_ptr->socket);
 
     responder_ptr->connected = false;
     free(responder_ptr);

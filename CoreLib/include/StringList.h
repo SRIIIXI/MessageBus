@@ -33,15 +33,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdbool.h>
 #include <stddef.h>
 
-#if defined(_WIN32) || defined (WIN32) || defined (_WIN64)
-#define LIBRARY_EXPORT __declspec(dllexport)
-#define LIBRARY_ENTRY
-#define LIBRARY_EXIT 
-#else
 #define LIBRARY_EXPORT __attribute__((visibility("default")))
 #define LIBRARY_ENTRY __attribute__((constructor))
 #define LIBRARY_EXIT __attribute__((destructor))
-#endif 
 
 extern LIBRARY_EXPORT void* str_list_allocate(void* lptr);
 extern LIBRARY_EXPORT void* str_list_allocate_from_string(void* lptr, const char* str, const char* delimiter);

@@ -30,22 +30,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Directory.h"
 #include "File.h"
 #include "StringEx.h"
+#include "StringList.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <stdint.h>
-
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-#include <Windows.h>
-#include <process.h>
-#include <direct.h>
-#define pid_t int
-#define getpid _getpid
-#define getcwd _getcwd
-#else
 #include <unistd.h>
-#endif
 
 #define END_OF_LINE "\n"
 #define MAX_LOGGERS 512
@@ -53,6 +44,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 static char log_level_names[5][16] = {"Information", "Error", "Warning", "Critical", "Panic"};
 
 void normalize_function_name(char* func_name);
+bool read_current_process_name(char* ptr);
 
 #pragma pack(1)
 typedef struct Logger
@@ -68,13 +60,10 @@ static Logger *loggers[MAX_LOGGERS] = {0};
 
 size_t	logger_allocate_default()
 {
-    char owner[33] = {0};
-    sprintf(owner, "%d", getpid());
-
-    return logger_allocate(10, owner, NULL);
+    return logger_allocate(10, NULL);
 }
 
-size_t	logger_allocate(size_t flszmb, const char* mname, const char* dirpath)
+size_t	logger_allocate(size_t flszmb, const char* dirpath)
 {
     size_t index = 0;
     while(index < MAX_LOGGERS)
@@ -94,6 +83,8 @@ size_t	logger_allocate(size_t flszmb, const char* mname, const char* dirpath)
     }
 
     loggers[index]->PID = getpid();
+
+    pid_t parent = getppid();
 
     loggers[index]->IsOpen = false;
     loggers[index]->FileHandle = NULL;
@@ -116,13 +107,20 @@ size_t	logger_allocate(size_t flszmb, const char* mname, const char* dirpath)
     }
     else
     {
-        char wd_path[1025] = { 0 };
-        int wd_len = 1024;
-        getcwd(wd_path, wd_len);
-        char* parent_dir = dir_get_parent_directory(wd_path);
-        strcat(loggers[index]->FileName, parent_dir);
-        strcat(loggers[index]->FileName, "log/");
-        free(parent_dir);
+        if(parent == 0)
+        {
+            strcat(loggers[index]->FileName, "/var/log/");
+        }
+        else
+        {
+            char wd_path[1025] = { 0 };
+            int wd_len = 1024;
+            getcwd(wd_path, wd_len);
+            char* parent_dir = dir_get_parent_directory(wd_path);
+            strcat(loggers[index]->FileName, parent_dir);
+            strcat(loggers[index]->FileName, "log/");
+            free(parent_dir);
+        }
     }
 
     if(!dir_is_exists(loggers[index]->FileName))
@@ -130,26 +128,9 @@ size_t	logger_allocate(size_t flszmb, const char* mname, const char* dirpath)
         dir_create_directory(loggers[index]->FileName);
     }
 
-    if(mname != NULL)
-    {
-        if(strcountchar(mname, '/') > 0)
-        {
-            char* base_name = file_get_basename(mname);
-            strcat(loggers[index]->FileName, base_name);
-            free(base_name);
-        }
-        else
-        {
-            strcat(loggers[index]->FileName, mname);
-        }
-    }
-    else
-    {
-        char owner[33] = { 0 };
-        sprintf(owner, "%d", getpid());
-        strcat(loggers[index]->FileName, owner);
-    }
-
+    char temp[1024] = {0};
+    read_current_process_name(&temp[0]);
+    strcat(loggers[index]->FileName, temp);
     strcat(loggers[index]->FileName, ".log");
 
     return (index+1);
@@ -162,40 +143,44 @@ void logger_release(size_t loggerid)
         return;
     }
 
-    if(loggers[loggerid] == NULL)
+    if(loggers[loggerid-1] == NULL)
     {
         return;
     }
 
-    if(loggers[loggerid]->IsOpen)
+    if(loggers[loggerid-1]->IsOpen)
     {
-        fflush(loggers[loggerid]->FileHandle);
-        fclose(loggers[loggerid]->FileHandle);
+        fflush(loggers[loggerid-1]->FileHandle);
+        fclose(loggers[loggerid-1]->FileHandle);
     }
 
-    free(loggers[loggerid]);
+    free(loggers[loggerid-1]);
 }
 
-void logger_start_logging(size_t loggerid)
+bool logger_start_logging(size_t loggerid)
 {
     if(loggerid-1 > MAX_LOGGERS-2)
     {
-        return;
+        return false;
     }
 
-    if(loggers[loggerid] == NULL)
+    if(loggers[loggerid-1] == NULL)
     {
-        return;
+        return false;
     }
 
-   loggers[loggerid]->FileHandle = fopen(loggers[loggerid]->FileName, "w");
+   loggers[loggerid-1]->FileHandle = fopen(loggers[loggerid-1]->FileName, "w");
 
-   if(loggers[loggerid]->FileHandle != NULL)
+   if(loggers[loggerid-1]->FileHandle != NULL)
    {
-       loggers[loggerid]->IsOpen = true;
+       loggers[loggerid-1]->IsOpen = true;
    }
-
-   return;
+   else
+   {
+       return false;
+   }
+   
+   return true;
 }
 
 void logger_stop_logging(size_t loggerid)
@@ -205,54 +190,54 @@ void logger_stop_logging(size_t loggerid)
         return;
     }
 
-    if(loggers[loggerid] == NULL)
+    if(loggers[loggerid-1] == NULL)
     {
         return;
     }
 
-    if(loggers[loggerid]->IsOpen)
+    if(loggers[loggerid-1]->IsOpen)
     {
-        fflush(loggers[loggerid]->FileHandle);
-        fclose(loggers[loggerid]->FileHandle);
-        loggers[loggerid]->IsOpen = false;
+        fflush(loggers[loggerid-1]->FileHandle);
+        fclose(loggers[loggerid-1]->FileHandle);
+        loggers[loggerid-1]->IsOpen = false;
     }
 }
 
-void logger_write(size_t loggerid, const char* logentry, LogLevel llevel, const char* func, const char* file, int line)
+bool logger_write(size_t loggerid, const char* logentry, LogLevel llevel, const char* func, const char* file, int line)
 {
     if(loggerid-1 > MAX_LOGGERS-2)
     {
-        return;
+        return false;
     }
 
-    if(loggers[loggerid] == NULL)
+    if(loggers[loggerid-1] == NULL)
     {
-        return;
+        return false;
     }
 
-    if(loggers[loggerid]->FileHandle == NULL || loggers[loggerid]->IsOpen == false)
+    if(loggers[loggerid-1]->FileHandle == NULL || loggers[loggerid-1]->IsOpen == false)
     {
-        return;
+        return false;
     }
 
     // Check the file size
-    size_t sz = (size_t)ftell(loggers[loggerid]->FileHandle);
+    size_t sz = (size_t)ftell(loggers[loggerid-1]->FileHandle);
 
     // If it exceeds the set size
-    if(sz*1024*1024 >= loggers[loggerid]->LogFileSizeMB)
+    if(sz*1024*1024 >= loggers[loggerid-1]->LogFileSizeMB)
     {
         // Stop logging
-        logger_stop_logging(loggerid);
+        logger_stop_logging(loggerid-1);
 
         // Rename the file
         char old_log_filename[1025] = {0};
-        strcat(old_log_filename, loggers[loggerid]->FileName);
+        strcat(old_log_filename, loggers[loggerid-1]->FileName);
         strcat(old_log_filename, ".old");
 
-        rename(loggers[loggerid]->FileName, old_log_filename);
+        rename(loggers[loggerid-1]->FileName, old_log_filename);
 
         // Reopen the log file with original name
-        logger_start_logging(loggerid);
+        logger_start_logging(loggerid-1);
     }
 
     normalize_function_name((char*)func);
@@ -263,30 +248,32 @@ void logger_write(size_t loggerid, const char* logentry, LogLevel llevel, const 
     tmp = localtime(&t);
 
     // Timestamp
-    fprintf(loggers[loggerid]->FileHandle, "%d-%d-%d %d:%d:%d\t",
-             tmp->tm_mday, tmp->tm_mon, tmp->tm_year,
+    fprintf(loggers[loggerid-1]->FileHandle, "%02d-%02d-%04d %02d:%02d:%02d\t",
+             tmp->tm_mday, (tmp->tm_mon+1), (tmp->tm_year+1900),
              tmp->tm_hour, tmp->tm_min, tmp->tm_sec);
 
     // Level
-    fprintf(loggers[loggerid]->FileHandle, "%s\t", log_level_names[llevel]);
+    fprintf(loggers[loggerid-1]->FileHandle, "%s\t", log_level_names[llevel]);
 
     // File
     char* base_file_name = file_get_basename(file);
-    fprintf(loggers[loggerid]->FileHandle, "%s\t", base_file_name);
+    fprintf(loggers[loggerid-1]->FileHandle, "%s\t", base_file_name);
     free(base_file_name);
 
     // Function
     normalize_function_name(func);
-    fprintf(loggers[loggerid]->FileHandle, "%s\t", func);
+    fprintf(loggers[loggerid-1]->FileHandle, "%s\t", func);
 
     // Message
-    fprintf(loggers[loggerid]->FileHandle, "%s", logentry);
+    fprintf(loggers[loggerid-1]->FileHandle, "%s", logentry);
 
     // End of line
-    fprintf(loggers[loggerid]->FileHandle, END_OF_LINE);
+    fprintf(loggers[loggerid-1]->FileHandle, END_OF_LINE);
 
     // Flush th contents
-    fflush(loggers[loggerid]->FileHandle);
+    fflush(loggers[loggerid-1]->FileHandle);
+
+    return true;
 }
 
 size_t logger_get_instance()
@@ -310,4 +297,56 @@ size_t logger_get_instance()
 void normalize_function_name(char* func_name)
 {
     
+}
+
+bool read_current_process_name(char* ptr)
+{
+    if(ptr == NULL)
+    {
+        return false;
+    }
+
+    char buffer[1025] = {0};
+    pid_t proc_id = getpid();
+
+    sprintf(buffer, "/proc/%d/cmdline", proc_id);
+
+    FILE* fp = fopen(buffer, "r");
+
+    if(fp)
+    {
+        memset(buffer, 0, 1025);
+
+        if(fgets(buffer, 1024, fp))
+        {
+            void* cmd_args = NULL;
+            str_list_allocate_from_string(cmd_args, buffer, " ");
+
+            if(cmd_args && str_list_item_count(cmd_args) > 0)
+            {
+                void* dir_tokens = NULL;
+                str_list_allocate_from_string(dir_tokens, str_list_get_first(cmd_args), "/");
+
+                if(dir_tokens && str_list_item_count(dir_tokens) > 0)
+                {
+                    strcpy(ptr, str_list_get_last(dir_tokens));
+                    free(dir_tokens);
+                }
+                free(cmd_args);
+            }
+            else
+            {
+                void* dir_tokens = NULL;
+                dir_tokens = str_list_allocate_from_string(dir_tokens, buffer, "/");
+
+                if(dir_tokens && str_list_item_count(dir_tokens) > 0)
+                {
+                    strcpy(ptr, str_list_get_last(dir_tokens));
+                    free(dir_tokens);
+                }
+            }
+        }
+
+        fclose(fp);
+    }
 }

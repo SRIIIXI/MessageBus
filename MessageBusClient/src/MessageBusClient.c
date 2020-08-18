@@ -22,16 +22,8 @@ modification, is allowed only with prior permission from CIMCON Automation
 #include <sys/types.h>
 #include <limits.h>
 
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-#include <Windows.h>
-#include <process.h>
-#include <psapi.h>
-#define pid_t int
-#define getpid _getpid
-#else
 #include <unistd.h>
 #include <pthread.h>
-#endif
 
 #pragma push(1)
 typedef struct message_bus
@@ -42,29 +34,15 @@ typedef struct message_bus
     char message_bus_host[32];
     char process_name[32];
     int message_bus_port;
-    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-    HANDLE thread;
-    #else
     pthread_t thread;
-    #endif
     unsigned long payload_sequence;
     bool loop;
 }message_bus;
 
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-static CRITICAL_SECTION socket_lock;
-#else
 static pthread_mutex_t socket_lock;
-#endif
-
 static bool read_current_process_name(void* ptr);
 static bool handle_protocol(void* ptr, payload* message);
-
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-static DWORD WINAPI responder_run(void* responder_thread_params);
-#else
 static void* responder_run(void* responder_thread_params);
-#endif
 
 LIBRARY_ENTRY void library_load()
 {
@@ -96,14 +74,7 @@ bool message_bus_initialize(void** pptr, messabus_bus_callback callback)
     message_bus_ptr->peer_node_list = str_list_allocate(message_bus_ptr->peer_node_list);
     message_bus_ptr->responder = responder_create_socket(&message_bus_ptr->responder, message_bus_ptr->message_bus_host, message_bus_ptr->message_bus_port);
 
-    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-        if (!InitializeCriticalSectionAndSpinCount(&socket_lock, 0x00000400))
-        {
-            return false;
-        }
-    #else
-        pthread_mutex_init(&socket_lock, NULL);
-    #endif
+    pthread_mutex_init(&socket_lock, NULL);
 
     if(!message_bus_ptr->responder)
     {
@@ -127,31 +98,18 @@ bool message_bus_open(void* ptr)
         return false;
     }
 
-    #if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
 
-        int thread_id = 0;
-        message_bus_ptr->thread = CreateThread(NULL, 0, &responder_run, (LPVOID)message_bus_ptr, CREATE_SUSPENDED, &thread_id);
-        if (message_bus_ptr->thread == NULL)
-        {
-            return false;
-        }
-        ResumeThread(message_bus_ptr->thread);
-
-    #else
-
-        pthread_attr_t pthread_attr;
-        memset(&pthread_attr, 0, sizeof(pthread_attr_t));
-        // default threading attributes
-        pthread_attr_init(&pthread_attr);
-        // allow a thread to exit cleanly without a join
-        pthread_attr_setdetachstate (&pthread_attr,PTHREAD_CREATE_DETACHED);
-        if (pthread_create(&message_bus_ptr->thread, &pthread_attr, responder_run, message_bus_ptr) != 0)
-        {
-            responder_close_socket(message_bus_ptr->responder);
-            return false;
-        }
-
-    #endif
+    pthread_attr_t pthread_attr;
+    memset(&pthread_attr, 0, sizeof(pthread_attr_t));
+    // default threading attributes
+    pthread_attr_init(&pthread_attr);
+    // allow a thread to exit cleanly without a join
+    pthread_attr_setdetachstate (&pthread_attr,PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&message_bus_ptr->thread, &pthread_attr, responder_run, message_bus_ptr) != 0)
+    {
+        responder_close_socket(message_bus_ptr->responder);
+        return false;
+    }
 
     return true;
 }
@@ -165,19 +123,9 @@ bool message_bus_close(void* ptr)
         return false;
     }
 
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_mutex_lock(&socket_lock);
-    #else
-        EnterCriticalSection(&socket_lock);
-    #endif
-
+    pthread_mutex_lock(&socket_lock);
     message_bus_ptr->loop = false;
-
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_mutex_unlock(&socket_lock);
-    #else
-        LeaveCriticalSection(&socket_lock);
-    #endif
+    pthread_mutex_unlock(&socket_lock);
 
     return true;
 }
@@ -303,11 +251,7 @@ long message_bus_has_node(void* ptr, const char* node_name)
         return -1;
     }
 
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_mutex_lock(&socket_lock);
-    #else
-        EnterCriticalSection(&socket_lock);
-    #endif
+    pthread_mutex_lock(&socket_lock);
 
     if (message_bus_ptr == NULL)
     {
@@ -321,11 +265,7 @@ long message_bus_has_node(void* ptr, const char* node_name)
 
     long index = str_list_index_of_like(message_bus_ptr->peer_node_list, node_name);
 
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_mutex_unlock(&socket_lock);
-    #else
-        LeaveCriticalSection(&socket_lock);
-    #endif
+    pthread_mutex_unlock(&socket_lock);
 
     return index;
 }
@@ -341,11 +281,7 @@ char* message_bus_node_fullname(void* ptr, long node_index)
         return NULL;
     }
 
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_mutex_lock(&socket_lock);
-    #else
-        EnterCriticalSection(&socket_lock);
-    #endif
+    pthread_mutex_lock(&socket_lock);
 
     if ((str_list_item_count(message_bus_ptr->peer_node_list)-1) < node_index)
     {
@@ -356,92 +292,16 @@ char* message_bus_node_fullname(void* ptr, long node_index)
         str = str_list_get_at(message_bus_ptr->peer_node_list, node_index);
     }
 
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-        pthread_mutex_unlock(&socket_lock);
-    #else
-        LeaveCriticalSection(&socket_lock);
-    #endif
+    pthread_mutex_unlock(&socket_lock);
 
     return str;
 }
-
-
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-
-static DWORD WINAPI responder_run(void* ptr)
-{
-    message_bus* message_bus_ptr = (struct message_bus*)ptr;
-
-    if (message_bus_ptr == NULL)
-    {
-        free(ptr);
-        return 0;
-    }
-
-    if (!responder_is_connected(message_bus_ptr->responder))
-    {
-        free(ptr);
-        return 0;
-    }
-
-    while (true)
-    {
-        payload message = { 0 };
-        char* buffer = (char*)&message;
-
-        if (responder_receive_buffer(message_bus_ptr->responder, &buffer, sizeof(struct payload) - sizeof(char*), false) && message_bus_ptr->loop == true)
-        {
-            if (message.data_size > 0)
-            {
-                char* databuffer = NULL;
-                if (!responder_receive_buffer(message_bus_ptr->responder, &databuffer, message.data_size, true))
-                {
-                    break;
-                }
-
-                databuffer[message.data_size] = 0;
-
-                if (message.payload_data_type == Text)
-                {
-                    message.data = databuffer;
-                }
-                else
-                {
-                    long decoded_len = 0;
-                    message.data = base64_decode(databuffer, message.data_size, message.data, &decoded_len);
-                    message.data_size = decoded_len;
-                    free(databuffer);
-                }
-            }
-
-            handle_protocol(message_bus_ptr, &message);
-
-            if (message.data_size > 0 && message.data != NULL)
-            {
-                free(message.data);
-            }
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    responder_close_socket(message_bus_ptr->responder);
-    str_list_clear(message_bus_ptr->peer_node_list);
-    free(message_bus_ptr);
-    return 0;
-}
-
-#else
 
 void* responder_run(void* ptr)
 {
     message_bus* message_bus_ptr = (struct message_bus*)ptr;
 
-    #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
     pthread_detach(pthread_self());
-    #endif
 
     if(message_bus_ptr == NULL)
     {
@@ -504,8 +364,6 @@ void* responder_run(void* ptr)
     return NULL;
 }
 
-#endif
-
 bool handle_protocol(void* ptr, payload* message)
 {
     message_bus* message_bus_ptr = (struct message_bus*)ptr;
@@ -518,11 +376,7 @@ bool handle_protocol(void* ptr, payload* message)
     // We get this once we connect and register ourselves
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODELIST)
     {
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_lock(&socket_lock);
-        #else
-                EnterCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_lock(&socket_lock);
 
         void* temp_list = NULL;
 
@@ -542,11 +396,7 @@ bool handle_protocol(void* ptr, payload* message)
             str_list_clear(temp_list);
         }
 
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_unlock(&socket_lock);
-        #else
-                LeaveCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_unlock(&socket_lock);
 
         return true;
     }
@@ -554,11 +404,7 @@ bool handle_protocol(void* ptr, payload* message)
     // We get this when there is a REGISTER at the server except ours own
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODE_ONLINE)
     {
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_lock(&socket_lock);
-        #else
-                EnterCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_lock(&socket_lock);
 
         long long index = str_list_index_of(message_bus_ptr->peer_node_list, message->data);
 
@@ -567,21 +413,13 @@ bool handle_protocol(void* ptr, payload* message)
             str_list_add_to_tail(message_bus_ptr->peer_node_list, message->data);
         }
 
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_unlock(&socket_lock);
-        #else
-                LeaveCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_unlock(&socket_lock);
     }
 
     // We get this when there is a DEREGISTER at the server
     if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODE_OFFLINE)
     {
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_lock(&socket_lock);
-        #else
-                EnterCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_lock(&socket_lock);
 
         long long index = str_list_index_of_like(message_bus_ptr->peer_node_list, message->data);
 
@@ -590,69 +428,13 @@ bool handle_protocol(void* ptr, payload* message)
             str_list_remove_at(message_bus_ptr->peer_node_list, index);
         }
 
-        #if !defined(_WIN32) && !defined(WIN32) && !defined(_WIN64)
-                pthread_mutex_unlock(&socket_lock);
-        #else
-                LeaveCriticalSection(&socket_lock);
-        #endif
+        pthread_mutex_unlock(&socket_lock);
     }
 
     message_bus_ptr->callback_ptr(message->sender, message->payload_type, message->payload_sub_type, message->payload_data_type, message->data, message->data_size, message->payload_id);
 
     return true;
 }
-
-#if defined(_WIN32) || defined(WIN32) || defined(_WIN64)
-
-bool read_current_process_name(void* ptr)
-{
-    message_bus* message_bus_ptr = (struct message_bus*)ptr;
-
-    if (message_bus_ptr == NULL)
-    {
-        return false;
-    }
-
-    int ownpid = getpid();
-
-    TCHAR szProcessName[MAX_PATH] = { 0 };
-
-    HANDLE hProcess = NULL;
-
-    hProcess = OpenProcess(PROCESS_QUERY_INFORMATION |
-    PROCESS_VM_READ,
-    FALSE, ownpid);
-
-    // Get the process name.
-
-    if (NULL != hProcess)
-    {
-        HMODULE hMod;
-        DWORD cbNeeded;
-
-        if (EnumProcessModules(hProcess, &hMod, sizeof(hMod),
-            &cbNeeded))
-        {
-            GetModuleBaseName(hProcess, hMod, szProcessName,
-                sizeof(szProcessName) / sizeof(TCHAR));
-        }
-    }
-
-    // Print the process name and identifier.
-
-    sprintf(message_bus_ptr->process_name, TEXT("%s"), szProcessName);
-
-    // Release the handle to the process.
-
-    if (hProcess)
-    {
-        CloseHandle(hProcess);
-    }
-
-    return 0;
-}
-
-#else
 
 bool read_current_process_name(void* ptr)
 {
@@ -694,10 +476,19 @@ bool read_current_process_name(void* ptr)
                 }
                 free(cmd_args);
             }
+            else
+            {
+                void* dir_tokens = NULL;
+                dir_tokens = str_list_allocate_from_string(dir_tokens, buffer, "/");
+
+                if(dir_tokens && str_list_item_count(dir_tokens) > 0)
+                {
+                    strcpy(message_bus_ptr->process_name, str_list_get_last(dir_tokens));
+                    free(dir_tokens);
+                }
+            }
         }
 
         fclose(fp);
     }
 }
-
-#endif
