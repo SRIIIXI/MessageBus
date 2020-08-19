@@ -63,7 +63,9 @@ extern LIBRARY_EXPORT bool message_bus_close(void* ptr);
 extern LIBRARY_EXPORT bool message_bus_register(void* ptr);
 extern LIBRARY_EXPORT bool message_bus_deregister(void* ptr);
 extern LIBRARY_EXPORT bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id);
+extern LIBRARY_EXPORT bool message_bus_send_loopback(void* ptr);
 extern LIBRARY_EXPORT long message_bus_has_node(void* ptr, const char* node_name);
 extern LIBRARY_EXPORT char* message_bus_node_fullname(void* ptr, long node_index);
+extern LIBRARY_EXPORT char* message_bus_localname(void* ptr);
 
 #endif

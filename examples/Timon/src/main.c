@@ -25,13 +25,14 @@ int main(int argc, char* argv[])
         return -1;
     }
 
-    printf("I am Timon. I am light and slim. I use a C based IPC\n");
+    printf("I am %s. I am light and slim. I use a C based IPC\n", message_bus_localname(message_bus));
 
     char str[] = "Hello Pumba! I'm Timon";
     long payload_id = 0;
     int snooze_time = 0;
 
-    message_bus_send(message_bus, "Timon", Data, LoopBack, Text, str, strlen(str), &payload_id);
+    //message_bus_send(message_bus, "Timon", Data, LoopBack, Text, str, strlen(str), &payload_id);
+    message_bus_send_loopback(message_bus);
 
     while(snooze_time < 60000)
     {

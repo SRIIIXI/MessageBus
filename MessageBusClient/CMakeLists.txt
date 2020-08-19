@@ -22,7 +22,6 @@ ${SOURCE}
 
 set(HEADERS
 ${HEADERS}
-
 ../CoreLib/include/Base64.h
 ../CoreLib/include/StringEx.h
 ../CoreLib/include/StringList.h
@@ -32,7 +31,7 @@ ${HEADERS}
 
 add_library(${Project} SHARED ${SOURCE} ${HEADERS} ./src/MessageBusClient.c ./include/MessageBusClient.h)
 
-add_library(${Project}++ SHARED ${SOURCE} ${HEADERS} ./src/MessageBusClient.cpp ./include/MessageBusClient.hpp)
+add_library(${Project}++ SHARED ${SOURCE} ${HEADERS} ./src/MessageBusClient.cpp ./include/MessageBusClient.hpp ./src/MessageBusClient.c ./include/MessageBusClient.h)
 
 
  

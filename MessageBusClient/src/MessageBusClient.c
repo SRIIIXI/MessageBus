@@ -242,6 +242,60 @@ bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, Messa
     return true;
 }
 
+bool message_bus_send_loopback(void* ptr)
+{
+    message_bus* message_bus_ptr = (struct message_bus*)ptr;
+
+    if(message_bus_ptr == NULL)
+    {
+        return false;
+    }
+
+    message_bus_ptr->payload_sequence++;
+    if(message_bus_ptr->payload_sequence > ULONG_MAX -1)
+    {
+        message_bus_ptr->payload_sequence = 1;
+    }
+
+    payload loopback_payload = {0};
+
+    loopback_payload.payload_type = PAYLOAD_TYPE_DATA;
+    loopback_payload.payload_sub_type = PAYLOAD_SUB_TYPE_LOOPBACK;
+    loopback_payload.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
+    strcpy(loopback_payload.sender, message_bus_ptr->process_name);
+    strcpy(loopback_payload.receipient, "MessageBus");
+    loopback_payload.data_size = strlen("LOOPBACK");
+    loopback_payload.data = (char*)calloc(1, loopback_payload.data_size + 1);
+    strcpy(loopback_payload.data, "LOOPBACK");
+    loopback_payload.payload_id = message_bus_ptr->payload_sequence;
+
+    if(!responder_send_buffer(message_bus_ptr->responder, &loopback_payload, sizeof (struct payload) - sizeof (char*)))
+    {
+        return false;
+    }
+
+    if(!responder_send_buffer(message_bus_ptr->responder, loopback_payload.data, loopback_payload.data_size))
+    {
+        return false;
+    }
+
+    free(loopback_payload.data);
+
+    return true;
+}
+
+char* message_bus_localname(void* ptr)
+{
+    message_bus* message_bus_ptr = (struct message_bus*)ptr;
+
+    if(message_bus_ptr == NULL)
+    {
+        return NULL;
+    }
+
+    return message_bus_ptr->process_name;
+}
+
 long message_bus_has_node(void* ptr, const char* node_name)
 {
     message_bus* message_bus_ptr = (struct message_bus*)ptr;
