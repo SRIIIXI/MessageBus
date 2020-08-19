@@ -8,11 +8,10 @@ modification, is allowed only with prior permission from CIMCON Automation
 
 */
 
-#include "MessageBusClient.h"
+#include "MessageBus.h"
 #include "StringEx.h"
 #include "StringList.h"
 #include "Responder.h"
-#include "Payload.h"
 #include "Base64.h"
 
 #include <string.h>
@@ -148,8 +147,8 @@ bool message_bus_register(void* ptr)
 
     payload reg_payload = {0};
 
-    reg_payload.payload_type = PAYLOAD_TYPE_EVENT;
-    reg_payload.payload_sub_type = PAYLOAD_SUB_TYPE_REGISTER;
+    reg_payload.payload_type = Event;
+    reg_payload.payload_sub_type = Register;
     strcpy(reg_payload.sender, message_bus_ptr->process_name);
     strcpy(reg_payload.receipient, "MessageBus");
     reg_payload.data_size = 0;
@@ -175,8 +174,8 @@ bool message_bus_deregister(void* ptr)
 
     payload dereg_payload = {0};
 
-    dereg_payload.payload_type = PAYLOAD_TYPE_EVENT;
-    dereg_payload.payload_sub_type = PAYLOAD_SUB_TYPE_DEREGISTER;
+    dereg_payload.payload_type = Event;
+    dereg_payload.payload_sub_type = DeRegister;
     strcpy(dereg_payload.sender, message_bus_ptr->process_name);
     strcpy(dereg_payload.receipient, "MessageBus");
     dereg_payload.data_size = 0;
@@ -259,9 +258,9 @@ bool message_bus_send_loopback(void* ptr)
 
     payload loopback_payload = {0};
 
-    loopback_payload.payload_type = PAYLOAD_TYPE_DATA;
-    loopback_payload.payload_sub_type = PAYLOAD_SUB_TYPE_LOOPBACK;
-    loopback_payload.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
+    loopback_payload.payload_type = Data;
+    loopback_payload.payload_sub_type = LoopBack;
+    loopback_payload.payload_data_type = Text;
     strcpy(loopback_payload.sender, message_bus_ptr->process_name);
     strcpy(loopback_payload.receipient, "MessageBus");
     loopback_payload.data_size = strlen("LOOPBACK");
@@ -428,7 +427,7 @@ bool handle_protocol(void* ptr, payload* message)
     }
 
     // We get this once we connect and register ourselves
-    if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODELIST)
+    if(message->payload_sub_type == NodeList)
     {
         pthread_mutex_lock(&socket_lock);
 
@@ -456,7 +455,7 @@ bool handle_protocol(void* ptr, payload* message)
     }
 
     // We get this when there is a REGISTER at the server except ours own
-    if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODE_ONLINE)
+    if(message->payload_sub_type == NodeOnline)
     {
         pthread_mutex_lock(&socket_lock);
 
@@ -471,7 +470,7 @@ bool handle_protocol(void* ptr, payload* message)
     }
 
     // We get this when there is a DEREGISTER at the server
-    if(message->payload_sub_type == PAYLOAD_SUB_TYPE_NODE_OFFLINE)
+    if(message->payload_sub_type == NodeOffline)
     {
         pthread_mutex_lock(&socket_lock);
 

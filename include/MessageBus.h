@@ -22,6 +22,20 @@ modification, is allowed only with prior permission from CIMCON Automation
 extern  LIBRARY_ENTRY void library_load();
 extern  LIBRARY_EXIT void library_unload();
 
+#pragma push(1)
+typedef struct payload
+{
+    char payload_type;
+    char payload_sub_type;
+    char payload_data_type;
+    char sender[32];
+    char receipient[32];
+    long payload_id;
+    long data_size;
+    char* data;
+}payload;
+#pragma pack(0)
+
 // Structures and types
 typedef enum PayloadType
 {

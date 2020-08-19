@@ -2,8 +2,8 @@
 #include "Logger.h"
 #include "StringEx.h"
 #include "Responder.h"
-#include "Payload.h"
 #include "SignalHandler.h"
+#include "MessageBus.h"
 
 #include <memory.h>
 #include <string.h>
@@ -239,7 +239,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
     int sender_socket = responder_get_socket(responder_ptr);
 
     // Event => Registration
-    if(message->payload_type == PAYLOAD_TYPE_EVENT && message->payload_sub_type == PAYLOAD_SUB_TYPE_REGISTER)
+    if(message->payload_type == Event && message->payload_sub_type == Register)
     {
         pthread_mutex_lock(&socket_lock);
 
@@ -270,7 +270,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
     }
 
     // Event => Deregistration
-    if(message->payload_type == PAYLOAD_TYPE_EVENT && message->payload_sub_type == PAYLOAD_SUB_TYPE_DEREGISTER)
+    if(message->payload_type == Event && message->payload_sub_type == Register)
     {
         pthread_mutex_lock(&socket_lock);
 
@@ -292,14 +292,14 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
     }
 
     //Loopback
-    if(message->payload_type == PAYLOAD_TYPE_DATA && message->payload_sub_type == PAYLOAD_SUB_TYPE_LOOPBACK)
+    if(message->payload_type == Data && message->payload_sub_type == LoopBack)
     {
         payload_send(message, responder_ptr);
         return true;
     }
 
     // All other payload types that carry trailing data buffers
-    if(message->payload_type == PAYLOAD_TYPE_DATA || message->payload_type == PAYLOAD_TYPE_REQUEST || message->payload_type == PAYLOAD_TYPE_RESPONSE || message->payload_type ==  PAYLOAD_TYPE_EVENT)
+    if(message->payload_type == Data || message->payload_type == Request || message->payload_type == Response || message->payload_type ==  Event)
     {
         pthread_mutex_lock(&socket_lock);
 
@@ -346,9 +346,9 @@ bool payload_broadcast_registration(const char* node_name)
         }
 
         struct payload node_online_message = { 0 };
-        node_online_message.payload_type = PAYLOAD_TYPE_EVENT;
-        node_online_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_ONLINE;
-        node_online_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
+        node_online_message.payload_type = Event;
+        node_online_message.payload_sub_type = NodeOnline;
+        node_online_message.payload_data_type = Text;
         node_online_message.payload_id = 0;
         strcpy(node_online_message.receipient, ptr->node_name);
         strcpy(node_online_message.sender, "MessageBus");
@@ -389,9 +389,9 @@ bool payload_broadcast_deregistration(const char* node_name)
         }
 
         struct payload node_offline_message;
-        node_offline_message.payload_type = PAYLOAD_TYPE_EVENT;
-        node_offline_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODE_OFFLINE;
-        node_offline_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
+        node_offline_message.payload_type = Event;
+        node_offline_message.payload_sub_type = NodeOffline;
+        node_offline_message.payload_data_type = Text;
         node_offline_message.payload_id = 0;
         strcpy(node_offline_message.receipient, ptr->node_name);
         strcpy(node_offline_message.sender, "MessageBus");
@@ -413,9 +413,9 @@ bool payload_broadcast_deregistration(const char* node_name)
 bool payload_send_nodelist(client_node* node)
 {
     struct payload node_list_message = { 0 };
-    node_list_message.payload_type = PAYLOAD_TYPE_EVENT;
-    node_list_message.payload_sub_type = PAYLOAD_SUB_TYPE_NODELIST;
-    node_list_message.payload_data_type = PAYLOAD_DATA_TYPE_TEXT;
+    node_list_message.payload_type = Event;
+    node_list_message.payload_sub_type = NodeList;
+    node_list_message.payload_data_type = Text;
     node_list_message.payload_id = 0;
     strcpy(node_list_message.receipient, node->node_name);
     strcpy(node_list_message.sender, "MessageBus");
