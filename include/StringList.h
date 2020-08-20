@@ -33,9 +33,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdbool.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define LIBRARY_EXPORT __attribute__((visibility("default")))
-#define LIBRARY_ENTRY __attribute__((constructor))
-#define LIBRARY_EXIT __attribute__((destructor))
 
 extern LIBRARY_EXPORT void* str_list_allocate(void* lptr);
 extern LIBRARY_EXPORT void* str_list_allocate_from_string(void* lptr, const char* str, const char* delimiter);
@@ -65,5 +67,8 @@ extern LIBRARY_EXPORT void str_list_sort(void* lptr);
 extern LIBRARY_EXPORT void str_list_merge(void* lptrFirst, void* lptrSecond);
 extern LIBRARY_EXPORT void str_list_join(void* lptrFirst, void* lptrSecond);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

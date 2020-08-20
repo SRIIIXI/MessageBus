@@ -34,9 +34,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stddef.h>
 #include <wchar.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define LIBRARY_EXPORT __attribute__((visibility("default")))
-#define LIBRARY_ENTRY __attribute__((constructor))
-#define LIBRARY_EXIT __attribute__((destructor))
 
 extern LIBRARY_EXPORT wchar_t* strtowstr(const char* str);
 extern LIBRARY_EXPORT char* strfromwstr(const wchar_t* wstr);
@@ -81,5 +83,9 @@ extern LIBRARY_EXPORT char** strsplitchar(const char* str, const char delimiter,
 extern LIBRARY_EXPORT char* strjoinwithsubstr(const char **strlist, const char* delimiter);
 extern LIBRARY_EXPORT char* strjoinwithchar(const char** strlist, const char delimiter);
 extern LIBRARY_EXPORT void  strfreelist(char** strlist, size_t numsubstr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
