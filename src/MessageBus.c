@@ -1,29 +1,11 @@
 ﻿/*
-BSD 2-Clause License
 
-Copyright (c) 2017, Subrato Roy (subratoroy@hotmail.com)
+Copyright (c) 2020, CIMCON Automation
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+modification, is allowed only with prior permission from CIMCON Automation
 
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "MessageBus.h"
@@ -31,6 +13,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "StringList.h"
 #include "Responder.h"
 #include "Base64.h"
+#include "ProcessLock.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -41,6 +24,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <unistd.h>
 #include <pthread.h>
+
+typedef enum RunState
+{
+    Run=0,
+    Stop=1,
+    Closed=2
+}RunState;
 
 #pragma push(1)
 typedef struct message_bus
@@ -53,13 +43,15 @@ typedef struct message_bus
     int message_bus_port;
     pthread_t thread;
     unsigned long payload_sequence;
-    bool loop;
+    RunState loop;
 }message_bus;
 
 static pthread_mutex_t socket_lock;
-static bool read_current_process_name(void* ptr);
 static bool handle_protocol(void* ptr, payload* message);
 static void* responder_run(void* responder_thread_params);
+
+static bool message_bus_register(void* ptr);
+static bool message_bus_deregister(void* ptr);
 
 LIBRARY_ENTRY void library_load()
 {
@@ -85,9 +77,9 @@ bool message_bus_initialize(void** pptr, messabus_bus_callback callback)
     strcpy(message_bus_ptr->message_bus_host, "localhost");
     message_bus_ptr->message_bus_port = 49151;
     message_bus_ptr->callback_ptr = callback;
-    read_current_process_name(message_bus_ptr);
+    process_lock_get_current_process_name(message_bus_ptr->process_name);
     message_bus_ptr->payload_sequence = 0;
-    message_bus_ptr->loop = true;
+    message_bus_ptr->loop = Run;
     message_bus_ptr->peer_node_list = str_list_allocate(message_bus_ptr->peer_node_list);
     message_bus_ptr->responder = responder_create_socket(&message_bus_ptr->responder, message_bus_ptr->message_bus_host, message_bus_ptr->message_bus_port);
 
@@ -128,6 +120,8 @@ bool message_bus_open(void* ptr)
         return false;
     }
 
+    message_bus_register(message_bus_ptr);
+
     return true;
 }
 
@@ -140,8 +134,20 @@ bool message_bus_close(void* ptr)
         return false;
     }
 
+    message_bus_deregister(message_bus_ptr);
+
     pthread_mutex_lock(&socket_lock);
-    message_bus_ptr->loop = false;
+    message_bus_ptr->loop = Stop;
+    responder_close_socket(message_bus_ptr->responder);
+
+    while(message_bus_ptr->loop != Closed) { sleep(5); }
+
+    str_list_clear(message_bus_ptr->peer_node_list);
+
+    free(message_bus_ptr->responder);
+
+    free(message_bus_ptr);
+
     pthread_mutex_unlock(&socket_lock);
 
     return true;
@@ -391,7 +397,7 @@ void* responder_run(void* ptr)
         payload message = {0};
         char* buffer = (char*)&message;
 
-        if(responder_receive_buffer(message_bus_ptr->responder,  &buffer, sizeof (struct payload) - sizeof (char*), false) && message_bus_ptr->loop == true)
+        if(responder_receive_buffer(message_bus_ptr->responder,  &buffer, sizeof (struct payload) - sizeof (char*), false) && message_bus_ptr->loop == Run)
         {
             if(message.data_size > 0)
             {
@@ -429,9 +435,8 @@ void* responder_run(void* ptr)
         }
     }
 
-    responder_close_socket(message_bus_ptr->responder);
-    str_list_clear(message_bus_ptr->peer_node_list);
-    free(message_bus_ptr);
+    message_bus_ptr->loop = Closed;
+
     return NULL;
 }
 
@@ -505,61 +510,4 @@ bool handle_protocol(void* ptr, payload* message)
     message_bus_ptr->callback_ptr(message->sender, message->payload_type, message->payload_sub_type, message->payload_data_type, message->data, message->data_size, message->payload_id);
 
     return true;
-}
-
-bool read_current_process_name(void* ptr)
-{
-    message_bus* message_bus_ptr = (struct message_bus*)ptr;
-
-    if(message_bus_ptr == NULL)
-    {
-        return false;
-    }
-
-    char buffer[1025] = {0};
-    pid_t proc_id = getpid();
-
-    sprintf(buffer, "/proc/%d/cmdline", proc_id);
-
-    FILE* fp = fopen(buffer, "r");
-
-    if(fp)
-    {
-        memset(buffer, 0, 1025);
-
-        if(fgets(buffer, 1024, fp))
-        {
-            void* cmd_args = NULL;
-            str_list_allocate_from_string(cmd_args, buffer, " ");
-
-            if(cmd_args && str_list_item_count(cmd_args) > 0)
-            {
-                void* dir_tokens = NULL;
-                str_list_allocate_from_string(dir_tokens, str_list_get_first(cmd_args), "/");
-
-                if(dir_tokens && str_list_item_count(dir_tokens) > 0)
-                {
-                    if(message_bus_ptr)
-                    {
-                        strcpy(message_bus_ptr->process_name, str_list_get_first(dir_tokens));
-                    }
-                    free(dir_tokens);
-                }
-                free(cmd_args);
-            }
-            else
-            {
-                void* dir_tokens = NULL;
-                dir_tokens = str_list_allocate_from_string(dir_tokens, buffer, "/");
-
-                if(dir_tokens && str_list_item_count(dir_tokens) > 0)
-                {
-                    strcpy(message_bus_ptr->process_name, str_list_get_last(dir_tokens));
-                    free(dir_tokens);
-                }
-            }
-        }
-
-        fclose(fp);
-    }
 }

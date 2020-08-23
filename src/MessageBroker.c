@@ -1,29 +1,11 @@
 /*
-BSD 2-Clause License
 
-Copyright (c) 2017, Subrato Roy (subratoroy@hotmail.com)
+Copyright (c) 2020, CIMCON Automation
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+modification, is allowed only with prior permission from CIMCON Automation
 
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "MessageBroker.h"
@@ -62,10 +44,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static SOCKET listener_socket = INVALID_SOCKET;
 static int listener_port = -1;
-static size_t logger_id = 0;
+static void* logger = 0;
 static socklen_t addrlen;
 static pthread_mutex_t socket_lock;
-
 
 typedef struct responder_thread_params
 {
@@ -94,16 +75,11 @@ bool broker_initialize(char* appname, int port)
 {
     listener_port = port;
 
-    logger_id = logger_allocate(10, NULL);
+    logger = logger_allocate(10, NULL);
 
-    if(logger_id == SIZE_MAX)
+    if(logger == NULL)
     {
         return false;
-    }
-
-    if(!logger_start_logging(logger_id))
-    {
-        return false;        
     }
 
     signals_register_callback(on_signal_received);
@@ -131,14 +107,14 @@ bool broker_run()
         return BindFailed;
     }
 
-    WriteLogNormal(logger_id, "Socket bind complete");
+    WriteInformation(logger, "Socket bind complete");
 
     if(listen(listener_socket,5) == SOCKET_ERROR)
     {
         return ListenFailed;
     }
 
-    WriteLogNormal(logger_id, "Socket in listening mode");
+    WriteInformation(logger, "Socket in listening mode");
 
     while(true)
     {
@@ -164,6 +140,7 @@ bool broker_run()
                 if (pthread_create(&params->thread, &pthread_attr, responder_run, params) != 0)
                 {
                     responder_close_socket(params->responder);
+                    free(params->responder);
                     free(params);
                     continue;
                 }
@@ -186,9 +163,27 @@ bool broker_run()
 
 void broker_stop()
 {
+    pthread_mutex_lock(&socket_lock);
+
+    for(size_t index = 0; index < MAX_RESPONDERS; index++)
+    {
+        client_node* ptr = client_node_array[index];
+
+        if(ptr != NULL)
+        {
+            shutdown(index, 0);
+            close(index);
+            free(ptr->responder);
+            free(ptr);
+        }
+    }
+
+    pthread_mutex_unlock(&socket_lock);
+
     shutdown(listener_socket, 2);
-    pthread_mutex_destroy(&socket_lock);
     close(listener_socket);
+    pthread_mutex_destroy(&socket_lock);
+    logger_release(logger);
 }
 
 void* responder_run(void* responder_thread_params)
@@ -211,6 +206,7 @@ void* responder_run(void* responder_thread_params)
         return NULL;
     }
 
+    client_node* disconnected_node = NULL;
     SOCKET current_socket = responder_get_socket(params->responder);
     bool ret = true;
 
@@ -237,6 +233,8 @@ void* responder_run(void* responder_thread_params)
             pthread_mutex_lock(&socket_lock);
             char node_name[32] = { 0 };
 
+            disconnected_node = client_node_array[current_socket];
+
             strcpy(node_name, ((client_node*)client_node_array[current_socket])->node_name);
 
             responder_close_socket(params->responder);
@@ -251,6 +249,8 @@ void* responder_run(void* responder_thread_params)
     }
 
     pthread_cancel(params->thread);
+    free(disconnected_node);
+    free(params->responder);
     free(params);
     pthread_exit(NULL);
 }
@@ -298,7 +298,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
     }
 
     // Event => Deregistration
-    if(message->payload_type == Event && message->payload_sub_type == Register)
+    if(message->payload_type == Event && message->payload_sub_type == DeRegister)
     {
         pthread_mutex_lock(&socket_lock);
 
@@ -310,8 +310,8 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
             payload_broadcast_deregistration(old_node->node_name);
 
             // Now remove the old node from the array
-            responder_close_socket(old_node->responder);
-            client_node_array[sender_socket] = NULL;
+            //responder_close_socket(old_node->responder);
+            //client_node_array[sender_socket] = NULL;
         }
 
         pthread_mutex_unlock(&socket_lock);
@@ -357,7 +357,7 @@ bool payload_broadcast_registration(const char* node_name)
 {
     char buffer[129] = {0};
     sprintf(buffer, "Node %s REGISTRATION", node_name);
-    WriteLogNormal(logger_id, buffer);
+    WriteInformation(logger, buffer);
 
     for (size_t index = 0; index < MAX_RESPONDERS; index++)
     {
@@ -399,7 +399,7 @@ bool payload_broadcast_deregistration(const char* node_name)
 {
     char buffer[129] = {0};
     sprintf(buffer, "Node %s DEREGISTRATION", node_name);
-    WriteLogNormal(logger_id, buffer);
+    WriteInformation(logger, buffer);
 
     // Send Node Offline event to all other nodes
     for (size_t index = 0; index < MAX_RESPONDERS; index++)
@@ -582,51 +582,52 @@ void on_signal_received(SignalType stype)
     {
         case Suspend:
         {
-            WriteLog(logger_id, "SUSPEND SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "SUSPEND SIGNAL", LOG_CRITICAL);
             break;
         }
         case Resume:
         {
-            WriteLog(logger_id, "RESUME SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "RESUME SIGNAL", LOG_CRITICAL);
             break;
         }
         case Shutdown:
         {
-            WriteLog(logger_id, "SHUTDOWN SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "SHUTDOWN SIGNAL", LOG_CRITICAL);
+            printf("\n\n====> SHUTDOWN SIGNAL <====\n\n");
+            broker_stop();
+            logger_release(logger);
             exit(0);
         }
         case Alarm:
         {
-            WriteLog(logger_id, "ALARM SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "ALARM SIGNAL", LOG_CRITICAL);
             break;
         }
         case Reset:
         {
-            WriteLog(logger_id, "RESET SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "RESET SIGNAL", LOG_CRITICAL);
             break;
         }
         case ChildExit:
         {
-            WriteLog(logger_id, "CHILD PROCESS EXIT SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "CHILD PROCESS EXIT SIGNAL", LOG_CRITICAL);
             break;
         }
         case Userdefined1:
         {
-            WriteLog(logger_id, "USER DEFINED 1 SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "USER DEFINED 1 SIGNAL", LOG_CRITICAL);
             break;
         }
         case Userdefined2:
         {
-            WriteLog(logger_id, "USER DEFINED 2 SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "USER DEFINED 2 SIGNAL", LOG_CRITICAL);
             break;
         }
         default:
         {
-            WriteLog(logger_id, "UNKNOWN SIGNAL", LOG_CRITICAL);
+            WriteLog(logger, "UNKNOWN SIGNAL", LOG_CRITICAL);
             break;
         }
     }
-
-    logger_stop_logging(logger_id);
 }
 
