@@ -1,18 +1,31 @@
 /*
-
-Copyright (c) 2020, CIMCON Automation
+BSD 2-Clause License
+Copyright (c) 2017, Subrato Roy (subratoroy@hotmail.com)
 All rights reserved.
-
 Redistribution and use in source and binary forms, with or without
-modification, is allowed only with prior permission from CIMCON Automation
-
+modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "MessageBroker.h"
-#include "Logger.h"
-#include "StringEx.h"
-#include "Responder.h"
-#include "SignalHandler.h"
+#include <CoreLib/Logger.h>
+#include <CoreLib/StringEx.h>
+#include <CoreLib/Responder.h>
+#include <CoreLib/SignalHandler.h>
 #include "MessageBus.h"
 
 #include <memory.h>
@@ -266,6 +279,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
 
     int sender_socket = responder_get_socket(responder_ptr);
 
+    /*
     // Event => Registration
     if(message->payload_type == Event && message->payload_sub_type == Register)
     {
@@ -325,6 +339,7 @@ bool payload_handle_protocol(payload* message, void* vptr_responder)
         payload_send(message, responder_ptr);
         return true;
     }
+    */
 
     // All other payload types that carry trailing data buffers
     if(message->payload_type == Data || message->payload_type == Request || message->payload_type == Response || message->payload_type ==  Event)
@@ -375,7 +390,6 @@ bool payload_broadcast_registration(const char* node_name)
 
         struct payload node_online_message = { 0 };
         node_online_message.payload_type = Event;
-        node_online_message.payload_sub_type = NodeOnline;
         node_online_message.payload_data_type = Text;
         node_online_message.payload_id = 0;
         strcpy(node_online_message.receipient, ptr->node_name);
@@ -418,7 +432,6 @@ bool payload_broadcast_deregistration(const char* node_name)
 
         struct payload node_offline_message;
         node_offline_message.payload_type = Event;
-        node_offline_message.payload_sub_type = NodeOffline;
         node_offline_message.payload_data_type = Text;
         node_offline_message.payload_id = 0;
         strcpy(node_offline_message.receipient, ptr->node_name);
@@ -442,7 +455,6 @@ bool payload_send_nodelist(client_node* node)
 {
     struct payload node_list_message = { 0 };
     node_list_message.payload_type = Event;
-    node_list_message.payload_sub_type = NodeList;
     node_list_message.payload_data_type = Text;
     node_list_message.payload_id = 0;
     strcpy(node_list_message.receipient, node->node_name);

@@ -7,13 +7,35 @@ Redistribution and use in source and binary forms, with or without
 modification, is allowed only with prior permission from CIMCON Automation
 
 */
+/*
+BSD 2-Clause License
+Copyright (c) 2017, Subrato Roy (subratoroy@hotmail.com)
+All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
 
 #include "MessageBus.h"
-#include "StringEx.h"
-#include "StringList.h"
-#include "Responder.h"
-#include "Base64.h"
-#include "ProcessLock.h"
+#include <CoreLib/StringEx.h>
+#include <CoreLib/StringList.h>
+#include <CoreLib/Responder.h>
+#include <CoreLib/Base64.h>
+#include <CoreLib/Environment.h>
 
 #include <string.h>
 #include <stdlib.h>
@@ -77,7 +99,7 @@ bool message_bus_initialize(void** pptr, messabus_bus_callback callback)
     strcpy(message_bus_ptr->message_bus_host, "localhost");
     message_bus_ptr->message_bus_port = 49151;
     message_bus_ptr->callback_ptr = callback;
-    process_lock_get_current_process_name(message_bus_ptr->process_name);
+    strcpy(message_bus_ptr->process_name, env_get_current_process_name(message_bus_ptr->process_name));
     message_bus_ptr->payload_sequence = 0;
     message_bus_ptr->loop = Run;
     message_bus_ptr->peer_node_list = str_list_allocate(message_bus_ptr->peer_node_list);
@@ -172,7 +194,6 @@ bool message_bus_register(void* ptr)
     payload reg_payload = {0};
 
     reg_payload.payload_type = Event;
-    reg_payload.payload_sub_type = Register;
     strcpy(reg_payload.sender, message_bus_ptr->process_name);
     strcpy(reg_payload.receipient, "MessageBus");
     reg_payload.data_size = 0;
@@ -199,7 +220,6 @@ bool message_bus_deregister(void* ptr)
     payload dereg_payload = {0};
 
     dereg_payload.payload_type = Event;
-    dereg_payload.payload_sub_type = DeRegister;
     strcpy(dereg_payload.sender, message_bus_ptr->process_name);
     strcpy(dereg_payload.receipient, "MessageBus");
     dereg_payload.data_size = 0;
@@ -209,7 +229,7 @@ bool message_bus_deregister(void* ptr)
 }
 
 // Messaging
-bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, MessageType mtype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id)
+bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, DataType dtype, const char* messagebuffer, long buffersize, long *payload_id)
 {
     message_bus* message_bus_ptr = (struct message_bus*)ptr;
 
@@ -240,7 +260,6 @@ bool message_bus_send(void* ptr, const char* node_name, PayloadType ptype, Messa
     payload data_payload = {0};
 
     data_payload.payload_type = ptype;
-    data_payload.payload_sub_type = mtype;
     data_payload.payload_data_type = dtype;
     strcpy(data_payload.sender, message_bus_ptr->process_name);
     strcpy(data_payload.receipient, node_name);
@@ -283,7 +302,6 @@ bool message_bus_send_loopback(void* ptr)
     payload loopback_payload = {0};
 
     loopback_payload.payload_type = Data;
-    loopback_payload.payload_sub_type = LoopBack;
     loopback_payload.payload_data_type = Text;
     strcpy(loopback_payload.sender, message_bus_ptr->process_name);
     strcpy(loopback_payload.receipient, "MessageBus");
@@ -449,6 +467,7 @@ bool handle_protocol(void* ptr, payload* message)
         return false;
     }
 
+    /*
     // We get this once we connect and register ourselves
     if(message->payload_sub_type == NodeList)
     {
@@ -506,8 +525,9 @@ bool handle_protocol(void* ptr, payload* message)
 
         pthread_mutex_unlock(&socket_lock);
     }
+    */
 
-    message_bus_ptr->callback_ptr(message->sender, message->payload_type, message->payload_sub_type, message->payload_data_type, message->data, message->data_size, message->payload_id);
+    message_bus_ptr->callback_ptr(message->sender, message->payload_type, message->payload_data_type, message->data, message->data_size, message->payload_id);
 
     return true;
 }
